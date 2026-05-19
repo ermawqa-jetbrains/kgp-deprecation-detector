@@ -33,10 +33,11 @@ This tool closes that loop.
 
 ## 2. What the tool does (in one paragraph)
 
-Given a `kotlin-gradle-plugin-X.Y.Z.jar` and a directory tree of Gradle build
-files, the tool extracts every `@Deprecated`-annotated symbol from the jar
-using ASM, then scans the build files for identifiers that match those
-symbols. Results are grouped by deprecation level (`ERROR` / `WARNING` /
+Given the `kotlin-gradle-plugin-X.Y.Z.jar` and `kotlin-gradle-plugin-api-X.Y.Z.jar`
+(public-API artifacts ship deprecations separately from implementation) and a
+directory tree of Gradle build files, the tool extracts every
+`@Deprecated`-annotated symbol from both jars using ASM, then scans the build
+files for identifiers that match those symbols. Results are grouped by deprecation level (`ERROR` / `WARNING` /
 `HIDDEN`), pinpointed to `file:line`, and the tool exits with status `1` when
 any `ERROR`-level usage is detected. This makes it suitable as a CI gate.
 
@@ -45,10 +46,10 @@ any `ERROR`-level usage is detected. This makes it suitable as a CI gate.
 ## 3. Architecture
 
 ```
-┌──────────────────────────────┐
-│  kotlin-gradle-plugin-X.Y.Z  │ ◄── -PkgpVersion / -PkgpJar
-│            .jar              │
-└──────────────┬───────────────┘
+┌──────────────────────────────────────┐
+│  kotlin-gradle-plugin-X.Y.Z.jar      │ ◄── -PkgpVersion / -PkgpJar
+│  kotlin-gradle-plugin-api-X.Y.Z.jar  │     (both jars: impl + public API)
+└──────────────────┬───────────────────┘
                │
                ▼
    ┌──────────────────────────┐
@@ -124,7 +125,7 @@ kgp-deprecation-detector/
 │   ├── DeprecatedSymbolTest.kt                     ← 8  tests: searchName / qualifiedName edge cases
 │   ├── GradleFileScannerTest.kt                    ← 17 tests: real matches, FP suppression, allowlist
 │   ├── GradleSourceMaskerTest.kt                   ← 10 tests: comments + strings + length preservation
-│   ├── KgpDeprecationExtractorTest.kt              ← 7  tests: synthetic ASM jars, all deprecation levels
+│   ├── KgpDeprecationExtractorTest.kt              ← 8  tests: synthetic ASM jars, all deprecation levels, $annotations strip
 │   └── DefaultSourceSetNameRegressionTest.kt       ← 1  test: end-to-end reproduction of IntelliJ bug
 │
 └── test-monorepo/                                  ← Plain-text fixtures, NOT a real Gradle project
@@ -147,17 +148,21 @@ kgp-deprecation-detector/
 | **`.gitignore`** | Excludes `.gradle/`, `build/`, IDE folders (`.idea/`, `.kotlin/`), Eclipse/NetBeans/VS Code metadata, OS junk (`.DS_Store`). |
 | **Gradle wrapper** (`gradlew`, `gradlew.bat`, `gradle/wrapper/*`) | Pins the Gradle version (9.4.0) used to build the project — committed so consumers do not need a system-wide Gradle install. |
 | **`test-monorepo/build.gradle.kts`** | Fixture A — uses `targetHierarchy.default()`, a real KGP API that was deprecated then escalated. Used by the live `checkKgpDeprecations` task as a smoke fixture. |
-| **`test-monorepo/defaultSourceSetName-sample/build.gradle.kts`** | Fixture B — reproduces the original IntelliJ regression pattern (`defaultSourceSetName`). Note that with current KGP this property is *already removed* (not just deprecated), so it no longer appears in the jar; the permanent regression coverage lives in the synthetic test (see §6). The directory layout also exercises the scanner's recursive walk. |
+| **`test-monorepo/defaultSourceSetName-sample/build.gradle.kts`** | Fixture B — reproduces the original IntelliJ regression pattern (`defaultSourceSetName`). The symbol lives on the `KotlinCompilation` interface in the `kotlin-gradle-plugin-api` jar (annotated `@Deprecated(level = ERROR)`), so the live detector flags it once `-api` is included in the scan. The synthetic regression test (`DefaultSourceSetNameRegressionTest`) provides permanent coverage independent of any specific KGP version. The directory layout also exercises the scanner's recursive walk. |
 | **Test files** | See §6 ("Why we believe the project is correct"). |
 
 ---
 
 ## 5. How it works (pipeline, step by step)
 
-1. **Resolve / load jar.** The `checkKgpDeprecations` Gradle task either resolves
-   `org.jetbrains.kotlin:kotlin-gradle-plugin:<version>` from Maven (using a
-   detached, non-transitive configuration so we get exactly that artifact), or
-   accepts an absolute path via `-PkgpJar`.
+1. **Resolve / load jars.** The `checkKgpDeprecations` Gradle task either resolves
+   both `org.jetbrains.kotlin:kotlin-gradle-plugin:<version>` and
+   `org.jetbrains.kotlin:kotlin-gradle-plugin-api:<version>` from Maven (using
+   detached, non-transitive configurations so we get exactly those artifacts), or
+   accepts one or more absolute paths via `-PkgpJar=<jar1>:<jar2>` (use the
+   platform path separator). Both jars must be scanned: the implementation jar
+   carries internal/MPP deprecations, while the `-api` jar carries deprecations
+   on public interfaces such as `KotlinCompilation.defaultSourceSetName`.
 
 2. **Extract deprecated symbols.** `KgpDeprecationExtractor` opens the jar with
    `java.util.jar.JarFile`, iterates every `.class` entry, hands each to an ASM
@@ -201,13 +206,13 @@ kgp-deprecation-detector/
 
 ### 6.1 Test strategy
 
-The detector is verified end-to-end by **43 tests** across **5 suites**, all
+The detector is verified end-to-end by **44 tests** across **5 suites**, all
 passing on every run:
 
 | Suite | Tests | Focus |
 |-------|-------|-------|
 | `DeprecatedSymbolTest` | 8 | `searchName` heuristic (strips `get`/`set`, preserves `is`), `qualifiedName` |
-| `KgpDeprecationExtractorTest` | 7 | Synthetic jars built with ASM in-memory: class/method/field annotations, all three levels, default-level fallback, package exclusion |
+| `KgpDeprecationExtractorTest` | 8 | Synthetic jars built with ASM in-memory: class/method/field annotations, all three levels, default-level fallback, package exclusion, `$annotations` synthetic-method suffix strip |
 | `GradleSourceMaskerTest` | 10 | Comment/string masking: line/block comments, double/triple/single-quoted strings, escape handling, length preservation |
 | `GradleFileScannerTest` | 17 | Real matches across `.gradle.kts` / `.gradle`, recursion, deduplication, allowlist behavior, comment/string FP suppression, the one documented residual FP (no receiver awareness) |
 | `DefaultSourceSetNameRegressionTest` | 1 | Permanent end-to-end reproduction of the IntelliJ regression: a synthetic KGP-shaped jar carrying a deprecated `getDefaultSourceSetName` is fed to the detector against a build script using that property; the test asserts the pipeline flags it at `ERROR` level |
@@ -232,21 +237,27 @@ regress to the original blind spot without this test failing:
   `GradleMatch` is at `ERROR` level and points at the right file/line.
 
 The reason this test uses a *synthetic* jar rather than depending on a real
-historic KGP version is exactly the lesson from the original incident: the
-real KGP eventually *removed* `defaultSourceSetName`, so a test depending on
-the live jar would have lost its signal precisely when it matters least.
+historic KGP version is to decouple the regression check from any specific
+KGP coordinate. The live KGP at the time of writing still carries the
+`@Deprecated(level = ERROR)` annotation on `KotlinCompilation.defaultSourceSetName`
+in the `kotlin-gradle-plugin-api` jar — but if/when it is eventually removed,
+the synthetic-jar test will continue to fail-stop a regression to the
+original blind spot.
 
 ### 6.3 Live behavior verification
 
 Beyond automated tests, the project has been manually verified against a real
-KGP build (`2.4.0-dev-8644`, which contains 1315 deprecated symbols: 175
-`ERROR`, 1065 `WARNING`, 75 `HIDDEN`):
+KGP build (`2.4.0-dev-8644`). Scanning both the `kotlin-gradle-plugin` and
+`kotlin-gradle-plugin-api` jars yields **1475 deprecated symbols** (302
+`ERROR`, 1092 `WARNING`, 81 `HIDDEN`):
 
-- The bundled fixture correctly produces **exactly one** `ERROR`-level finding
-  (`targetHierarchy.default()` in `test-monorepo/build.gradle.kts:4`) with the
-  underline pointing at the right identifier.
+- The bundled fixtures correctly produce findings including `defaultSourceSetName`
+  on `defaultSourceSetName-sample/build.gradle.kts:10` (the IntelliJ regression
+  scenario, caught at `ERROR` level via the public `KotlinCompilation` interface
+  in the `-api` jar), `targetHierarchy.default()` on `build.gradle.kts:3`, and
+  the `kotlinOptions { … }` DSL deprecation on line 19.
 - Empty input directories produce a clean `Result: OK` with exit code 0.
-- The same jar fed twice produces byte-identical output (deterministic).
+- The same jars fed twice produce byte-identical output (deterministic).
 - The Maven-resolution path (`-PkgpVersion`) and the direct-jar path
   (`-PkgpJar`) produce identical results.
 
@@ -260,9 +271,10 @@ Honest framing for the team:
   Identifier collisions between deprecated KGP symbols and legitimate Gradle /
   Kotlin DSL methods are mitigated by the comment/string masker and the
   allowlist, but not fully eliminated.
-- The tool **only sees what is still annotated in the jar.** Once an API has
-  been removed entirely, it disappears from the jar and the detector cannot
-  flag it anymore. This is why the IntelliJ-style regression test uses a
+- The tool **only sees what is still annotated in the jars it is given.** Once
+  an API has been removed from both the `kotlin-gradle-plugin` and
+  `kotlin-gradle-plugin-api` jars, it disappears entirely and the detector
+  cannot flag it anymore. This is why the IntelliJ-style regression test uses a
   synthetic jar.
 - The tool **does not know about source-set / configuration scoping.** Every
   matched identifier is reported regardless of which target / source-set it
@@ -282,7 +294,7 @@ All commands run from the repository root. Requires JDK 17+ (Gradle's JVM toolch
 ./gradlew test
 ```
 
-Expected: `BUILD SUCCESSFUL`, 43 tests, 0 failures. HTML report written to
+Expected: `BUILD SUCCESSFUL`, 44 tests, 0 failures. HTML report written to
 `build/reports/tests/test/index.html`.
 
 ### 7.2 Run the live detector
@@ -291,8 +303,10 @@ Expected: `BUILD SUCCESSFUL`, 43 tests, 0 failures. HTML report written to
 # Resolve KGP from Maven, scan the bundled fixtures
 ./gradlew checkKgpDeprecations -PkgpVersion=2.4.0-dev-8644
 
-# Or point at a jar file directly (skip Maven resolution)
-./gradlew checkKgpDeprecations -PkgpJar=/abs/path/kotlin-gradle-plugin-X.Y.Z.jar
+# Or point at jar files directly (skip Maven resolution).
+# Join multiple jars with ':' on macOS/Linux, ';' on Windows (the platform path separator).
+./gradlew checkKgpDeprecations \
+  -PkgpJar=/abs/path/kotlin-gradle-plugin-X.Y.Z.jar:/abs/path/kotlin-gradle-plugin-api-X.Y.Z.jar
 
 # Scan a different monorepo
 ./gradlew checkKgpDeprecations \
@@ -309,8 +323,8 @@ Expected: `BUILD SUCCESSFUL`, 43 tests, 0 failures. HTML report written to
 
 | Parameter | Required | Default | Purpose |
 |-----------|----------|---------|---------|
-| `-PkgpVersion=<ver>` | one of these two | — | Resolve `kotlin-gradle-plugin:<ver>` from Maven |
-| `-PkgpJar=<path>` | one of these two | — | Use jar directly |
+| `-PkgpVersion=<ver>` | one of these two | — | Resolve both `kotlin-gradle-plugin:<ver>` and `kotlin-gradle-plugin-api:<ver>` from Maven |
+| `-PkgpJar=<path>[:<path>]` | one of these two | — | Use jars directly; join multiple paths with the platform path separator (`:` on macOS/Linux, `;` on Windows) |
 | `-PmonorepoDir=<path>` | no | `test-monorepo` | Root to scan recursively |
 | `-Pallowlist=<path>` | no | — | Text file: one symbol qualified name per line; `#` introduces a comment |
 
@@ -453,5 +467,5 @@ Roughly in increasing order of effort:
 ./gradlew tasks
 ```
 
-Project size: **~400 LOC** main source, **~700 LOC** test source, **43
+Project size: **~400 LOC** main source, **~700 LOC** test source, **44
 tests**, zero runtime dependencies beyond ASM 9.7.

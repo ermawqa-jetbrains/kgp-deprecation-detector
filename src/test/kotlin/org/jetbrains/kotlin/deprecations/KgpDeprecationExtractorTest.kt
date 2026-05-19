@@ -135,6 +135,29 @@ class KgpDeprecationExtractorTest {
     }
 
     @Test
+    fun strips_dollar_annotations_suffix_from_kotlin_property_synthetic_method() {
+        // Kotlin emits property-level @Deprecated on a synthetic `<name>$annotations`
+        // method, not on the real getter. The extractor must record the canonical
+        // accessor name so the symbol's searchName aligns with call sites in user code.
+        val jar = jarOf(
+            "foo/PropHolder.class" to classBytes(
+                internalName = "foo/PropHolder",
+                methods = listOf(
+                    MethodSpec(
+                        name = "getDefaultSourceSetName\$annotations",
+                        descriptor = "()V",
+                        deprecation = DeprecationSpec("ERROR", "use defaultSourceSet.name", "defaultSourceSet.name"),
+                    )
+                )
+            )
+        )
+
+        val s = KgpDeprecationExtractor.extract(jar.absolutePath).single()
+        assertEquals("getDefaultSourceSetName", s.memberName)
+        assertEquals("defaultSourceSetName", s.searchName)
+    }
+
+    @Test
     fun extracts_field_level_deprecation() {
         val cw = ClassWriter(0)
         cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "foo/WithField", null, "java/lang/Object", null)

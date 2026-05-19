@@ -9,7 +9,11 @@ fun main(args: Array<String>) {
         return
     }
 
-    val jarPath = args[0]
+    val jarPaths = args[0].split(File.pathSeparator).filter { it.isNotBlank() }
+    if (jarPaths.isEmpty()) {
+        printUsage()
+        return
+    }
     val monorepoRoot = File(args[1]).canonicalFile
     val allowlistPath = args.getOrNull(2)?.takeIf { it.isNotBlank() }
 
@@ -26,12 +30,12 @@ fun main(args: Array<String>) {
     } else emptySet()
 
     println("KGP deprecation check")
-    println("  Inspecting: $jarPath")
+    println("  Inspecting: ${jarPaths.joinToString(", ")}")
     println("  Scanning  : ${monorepoRoot.path}")
     println("  Allowlist : ${if (allowlistPath != null) "${allowlist.size} entries from $allowlistPath" else "(none)"}")
     println()
 
-    val deprecated = KgpDeprecationExtractor.extract(jarPath)
+    val deprecated = jarPaths.flatMap { KgpDeprecationExtractor.extract(it) }
     if (deprecated.isEmpty()) {
         println("No deprecated symbols found in jar.")
         println("Result: OK")
@@ -98,12 +102,16 @@ private fun underline(line: String, symbol: DeprecatedSymbol): String? {
 }
 
 private fun printUsage() {
-    System.err.println("Usage: kgp-deprecation-checker <kgp-jar-path> <monorepo-dir> [<allowlist-file>]")
-    System.err.println("  kgp-jar-path   Path to kotlin-gradle-plugin JAR to inspect")
+    val sep = File.pathSeparator
+    System.err.println("Usage: kgp-deprecation-checker <kgp-jar-paths> <monorepo-dir> [<allowlist-file>]")
+    System.err.println("  kgp-jar-paths  One or more jar paths joined by '$sep' (platform path separator).")
+    System.err.println("                 Typically pass both kotlin-gradle-plugin and kotlin-gradle-plugin-api jars,")
+    System.err.println("                 since deprecated public-API symbols (e.g. KotlinCompilation.defaultSourceSetName)")
+    System.err.println("                 are annotated only in the -api jar.")
     System.err.println("  monorepo-dir   Root directory to scan for .gradle.kts / .gradle files")
     System.err.println("  allowlist-file Optional. Text file: one symbol qualifiedName per line; '#' starts a comment.")
     System.err.println()
     System.err.println("As a Gradle task:")
     System.err.println("  ./gradlew checkKgpDeprecations -PkgpVersion=<ver> [-PmonorepoDir=<path>] [-Pallowlist=<path>]")
-    System.err.println("  ./gradlew checkKgpDeprecations -PkgpJar=<abs-path> [-PmonorepoDir=<path>] [-Pallowlist=<path>]")
+    System.err.println("  ./gradlew checkKgpDeprecations -PkgpJar=<jar1>${sep}<jar2> [-PmonorepoDir=<path>] [-Pallowlist=<path>]")
 }
