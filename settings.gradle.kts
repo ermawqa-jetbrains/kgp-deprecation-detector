@@ -4,7 +4,7 @@ pluginManagement {
         mavenCentral()
     }
     plugins {
-        kotlin("jvm") version "2.1.20"
+        kotlin("jvm") version "2.3.21"
     }
 }
 rootProject.name = "kgp-deprecation-detector"
