@@ -3,115 +3,144 @@ package org.jetbrains.kotlin.deprecations
 import java.io.File
 import kotlin.system.exitProcess
 
+/**
+ * Scans a monorepo of Kotlin Gradle build scripts (`.gradle.kts`) for usages of
+ * `@Deprecated` APIs, resolving each script the way Gradle does.
+ *
+ * Usage: `<monorepo-dir> [<allowlist-file>] [<gradle-installation-dir>]`
+ *  - allowlist-file: one deprecated-symbol signature per line; `#` starts a comment.
+ *  - gradle-installation-dir: optional; defaults to each project's own Gradle wrapper.
+ *
+ * Exit 1 if any ERROR-level deprecation is found, else 0.
+ */
 fun main(args: Array<String>) {
-    if (args.size < 2 || args[0].isBlank() || args[1].isBlank()) {
+    if (args.isEmpty() || args[0].isBlank()) {
         printUsage()
         return
     }
-
-    val jarPaths = args[0].split(File.pathSeparator).filter { it.isNotBlank() }
-    if (jarPaths.isEmpty()) {
-        printUsage()
+    val monorepoRoot = File(args[0]).canonicalFile
+    if (!monorepoRoot.isDirectory) {
+        System.err.println("Not a directory: ${monorepoRoot.path}")
         return
     }
-    val monorepoRoot = File(args[1]).canonicalFile
-    val allowlistPath = args.getOrNull(2)?.takeIf { it.isNotBlank() }
+    val allowlist = args.getOrNull(1)?.takeIf { it.isNotBlank() }
+        ?.let { loadAllowlist(File(it)) ?: return } ?: emptySet()
+    val gradleInstallation = args.getOrNull(2)?.takeIf { it.isNotBlank() }?.let(::File)
 
-    val allowlist: Set<String> = if (allowlistPath != null) {
-        val file = File(allowlistPath)
-        if (!file.exists()) {
-            System.err.println("Allowlist file not found: ${file.path}")
-            return
-        }
-        file.readLines()
-            .map { it.substringBefore('#').trim() }
-            .filter { it.isNotEmpty() }
-            .toSet()
-    } else emptySet()
+    val scripts = monorepoRoot.walkTopDown()
+        .filter { it.isFile && it.name.endsWith(".gradle.kts") }
+        .toList()
 
     println("KGP deprecation check")
-    println("  Inspecting: ${jarPaths.joinToString(", ")}")
-    println("  Scanning  : ${monorepoRoot.path}")
-    println("  Allowlist : ${if (allowlistPath != null) "${allowlist.size} entries from $allowlistPath" else "(none)"}")
+    println("  Scanning : ${monorepoRoot.path}")
+    println("  Scripts  : ${scripts.size} .gradle.kts file(s)")
+    println("  Allowlist: ${if (allowlist.isEmpty()) "(none)" else "${allowlist.size} entries"}")
     println()
 
-    val deprecated = jarPaths.flatMap { KgpDeprecationExtractor.extract(it) }
-    if (deprecated.isEmpty()) {
-        println("No deprecated symbols found in jar.")
+    if (scripts.isEmpty()) {
+        println("No .gradle.kts files found.")
         println("Result: OK")
         return
     }
 
-    val errSym = deprecated.count { it.level == DeprecationLevel.ERROR }
-    val warnSym = deprecated.count { it.level == DeprecationLevel.WARNING }
-    val hidSym = deprecated.count { it.level == DeprecationLevel.HIDDEN }
-    println("Deprecated symbols in KGP: ${deprecated.size}  (ERROR=$errSym  WARNING=$warnSym  HIDDEN=$hidSym)")
-    println()
+    val analyzer = KgpDeprecationAnalyzer()
+    val findings = mutableListOf<Finding>()
+    var unresolved = 0
+    for (script in scripts) {
+        val projectDir = findGradleRoot(script, monorepoRoot)
+        when (val model = GradleScriptModelProvider.fetch(projectDir, script, gradleInstallation)) {
+            is ScriptModelResult.Resolved ->
+                findings += analyzer.analyze(script, model.classPath, model.implicitImports)
+            is ScriptModelResult.Failed -> {
+                unresolved++
+                System.err.println(
+                    "  ! could not resolve ${script.relativeTo(monorepoRoot).path}: " +
+                        model.message.lineSequence().first(),
+                )
+            }
+        }
+    }
 
-    val matches = GradleFileScanner.scan(monorepoRoot.path, deprecated, allowlist)
-    if (matches.isEmpty()) {
-        println("No usages of deprecated KGP APIs found in scanned Gradle files.")
+    val reported = findings.filterNot { it.symbol in allowlist }
+    report(reported, monorepoRoot, unresolved)
+
+    if (reported.any { it.level == DeprecationLevel.ERROR }) exitProcess(1)
+}
+
+/** Nearest ancestor (up to [stopAt]) containing a settings script; else the script's own dir. */
+private fun findGradleRoot(script: File, stopAt: File): File {
+    var dir: File? = script.parentFile
+    while (dir != null) {
+        if (File(dir, "settings.gradle.kts").exists() || File(dir, "settings.gradle").exists()) return dir
+        if (dir.canonicalFile == stopAt) break
+        dir = dir.parentFile
+    }
+    return script.parentFile
+}
+
+private fun loadAllowlist(file: File): Set<String>? {
+    if (!file.exists()) {
+        System.err.println("Allowlist file not found: ${file.path}")
+        return null
+    }
+    return file.readLines()
+        .map { it.substringBefore('#').trim() }
+        .filter { it.isNotEmpty() }
+        .toSet()
+}
+
+private fun report(findings: List<Finding>, monorepoRoot: File, unresolved: Int) {
+    if (findings.isEmpty()) {
+        println("No deprecated API usages found in resolved scripts.")
+        if (unresolved > 0) println("UNRESOLVED: $unresolved script(s) could not be modelled (see warnings above).")
         println("Result: OK")
         return
     }
 
-    val affectedFiles = matches.map { it.file }.toSet().size
-    println("Found ${matches.size} deprecated usage(s) in $affectedFiles file(s):")
+    val affected = findings.map { it.file }.toSet().size
+    println("Found ${findings.size} deprecated usage(s) in $affected file(s):")
     println("------------------------------------------------------------")
 
-    val levelOrder = listOf(DeprecationLevel.ERROR, DeprecationLevel.WARNING, DeprecationLevel.HIDDEN)
-    for (level in levelOrder) {
-        val bucket = matches.filter { it.symbol.level == level }
+    for (level in listOf(DeprecationLevel.ERROR, DeprecationLevel.WARNING, DeprecationLevel.HIDDEN)) {
+        val bucket = findings.filter { it.level == level }
         if (bucket.isEmpty()) continue
-
-        bucket.groupBy { it.symbol.qualifiedName }.forEach { (qName, usages) ->
-            val sym = usages.first().symbol
+        bucket.groupBy { it.symbol }.forEach { (symbol, usages) ->
             println()
-            println("[${level.name}] $qName")
-            if (sym.message.isNotBlank()) println("  Reason : ${sym.message}")
-            sym.replaceWith?.let { println("  Replace: $it") }
-            println("  Hits   : ${usages.size}")
-            usages.forEach { m ->
-                val rel = File(m.file).relativeToOrSelf(monorepoRoot).path
-                println("    $rel:${m.lineNumber}")
-                println("      ${m.line}")
-                underline(m.line, sym)?.let { println("      $it") }
+            println("[${level.name}] $symbol")
+            println("  Reason: ${usages.first().message}")
+            println("  Hits  : ${usages.size}")
+            usages.forEach { f ->
+                val rel = File(f.file).relativeToOrSelf(monorepoRoot).path
+                println("    $rel:${f.line}:${f.column}")
+                sourceLineWithCaret(f)?.forEach { println("      $it") }
             }
         }
     }
 
     println("------------------------------------------------------------")
-    val errorUsages = matches.count { it.symbol.level == DeprecationLevel.ERROR }
-    val warnUsages = matches.count { it.symbol.level == DeprecationLevel.WARNING }
-    val hidUsages = matches.count { it.symbol.level == DeprecationLevel.HIDDEN }
-
-    if (errorUsages > 0) {
-        System.err.println("Result: FAIL — $errorUsages ERROR-level usage(s) detected ($warnUsages WARNING, $hidUsages HIDDEN).")
-        exitProcess(1)
+    val errors = findings.count { it.level == DeprecationLevel.ERROR }
+    val warnings = findings.count { it.level == DeprecationLevel.WARNING }
+    val hidden = findings.count { it.level == DeprecationLevel.HIDDEN }
+    if (unresolved > 0) println("UNRESOLVED: $unresolved script(s) could not be modelled (see warnings above).")
+    if (errors > 0) {
+        System.err.println("Result: FAIL — $errors ERROR-level usage(s) ($warnings WARNING, $hidden HIDDEN).")
+    } else {
+        println("Result: OK — no ERROR-level usages ($warnings WARNING, $hidden HIDDEN noted).")
     }
-    println("Result: OK — no ERROR-level usages ($warnUsages WARNING, $hidUsages HIDDEN noted).")
 }
 
-private fun underline(line: String, symbol: DeprecatedSymbol): String? {
-    val candidates = listOfNotNull(symbol.searchName, symbol.memberName).filter { it.isNotBlank() }
-    for (term in candidates) {
-        val idx = line.indexOf(term)
-        if (idx >= 0) return " ".repeat(idx) + "^".repeat(term.length)
-    }
-    return null
+private fun sourceLineWithCaret(finding: Finding): List<String>? {
+    val line = runCatching { File(finding.file).readLines().getOrNull(finding.line - 1) }.getOrNull() ?: return null
+    val caret = " ".repeat((finding.column - 1).coerceAtLeast(0)) + "^"
+    return listOf(line, caret)
 }
 
 private fun printUsage() {
-    val sep = File.pathSeparator
-    System.err.println("Usage: kgp-deprecation-checker <kgp-jar-paths> <monorepo-dir> [<allowlist-file>]")
-    System.err.println("  kgp-jar-paths  One or more jar paths joined by '$sep' (platform path separator).")
-    System.err.println("                 Typically pass both kotlin-gradle-plugin and kotlin-gradle-plugin-api jars,")
-    System.err.println("                 since deprecated public-API symbols (e.g. KotlinCompilation.defaultSourceSetName)")
-    System.err.println("                 are annotated only in the -api jar.")
-    System.err.println("  monorepo-dir   Root directory to scan for .gradle.kts / .gradle files")
-    System.err.println("  allowlist-file Optional. Text file: one symbol qualifiedName per line; '#' starts a comment.")
+    System.err.println("Usage: kgp-deprecation-detector <monorepo-dir> [<allowlist-file>] [<gradle-installation-dir>]")
+    System.err.println("  monorepo-dir            Root directory to scan for .gradle.kts files.")
+    System.err.println("  allowlist-file          Optional. One deprecated-symbol signature per line; '#' starts a comment.")
+    System.err.println("  gradle-installation-dir Optional. Defaults to each project's own Gradle wrapper.")
     System.err.println()
     System.err.println("As a Gradle task:")
-    System.err.println("  ./gradlew checkKgpDeprecations -PkgpVersion=<ver> [-PmonorepoDir=<path>] [-Pallowlist=<path>]")
-    System.err.println("  ./gradlew checkKgpDeprecations -PkgpJar=<jar1>${sep}<jar2> [-PmonorepoDir=<path>] [-Pallowlist=<path>]")
+    System.err.println("  ./gradlew checkKgpDeprecations [-PmonorepoDir=<path>] [-Pallowlist=<path>] [-PkgpEngineVersion=<ver>]")
 }
