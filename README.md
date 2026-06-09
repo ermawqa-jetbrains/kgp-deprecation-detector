@@ -24,8 +24,9 @@ For each `.gradle.kts`:
    classpath (including the per-project *generated accessors* that back `kotlin { }`,
    `compilations`, …) and Gradle's implicit imports.
 2. The script is compiled with the **Kotlin scripting host** using that classpath, an
-   implicit `Project` receiver, and the **sam-with-receiver** plugin (so implicit
-   accessor blocks like `kotlin { jvm { withJava() } }` resolve exactly as in Gradle).
+   implicit `Project` receiver, and the same compiler plugins Gradle applies —
+   **sam-with-receiver** (so implicit accessor blocks like `kotlin { jvm { withJava() } }`
+   resolve) and **assignment** (so lazy-property assignment like `jvmTarget = …` resolves).
    The leading `plugins { }` block is skipped (Gradle compiles it separately).
 3. The compiler's `DEPRECATION` / `DEPRECATION_ERROR` diagnostics become findings, each
    with the exact `file:line:column`, the deprecated declaration's signature, and the

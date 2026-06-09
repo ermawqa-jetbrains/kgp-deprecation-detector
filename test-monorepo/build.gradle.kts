@@ -13,6 +13,14 @@ kotlin {
     }
 }
 
+// Lazy-property assignment (`Property<String> = …`). This only compiles when the
+// kotlin-assignment compiler plugin is applied, exactly as Gradle applies it — so it
+// proves the detector resolves real scripts, not just accessor chains. Not deprecated,
+// so it must NOT be flagged.
+tasks.withType<org.gradle.api.tasks.bundling.Jar>().configureEach {
+    archiveBaseName = "kgp-detector-fixture"
+}
+
 // Decoy: a user symbol named like the deprecated KGP one. A correct, resolving
 // detector must NOT flag this — only the real withJava() above.
 val withJava = "not the KGP withJava()"

@@ -23,14 +23,16 @@ import kotlin.script.experimental.jvmhost.JvmScriptCompiler
  * deprecated-API usages as the compiler's own DEPRECATION diagnostics.
  *
  * The script is compiled the way Gradle compiles it — an implicit `Project` receiver
- * plus the sam-with-receiver plugin — so implicit accessor chains like
- * `kotlin { jvm { withJava() } }` bind to their real declarations. Every reported
- * finding is therefore compiler-verified: there are no false positives from
- * same-named symbols. Scope is every deprecation the compiler resolves in the script
- * body (overwhelmingly KGP in Kotlin build scripts), not only KGP-package symbols.
+ * plus the same compiler plugins Gradle applies (sam-with-receiver and assignment) —
+ * so implicit accessor chains like `kotlin { jvm { withJava() } }` and lazy-property
+ * assignments like `jvmTarget = JvmTarget.JVM_11` bind to their real declarations.
+ * Every reported finding is therefore compiler-verified: there are no false positives
+ * from same-named symbols. Scope is every deprecation the compiler resolves in the
+ * script body (overwhelmingly KGP in Kotlin build scripts), not only KGP-package symbols.
  */
 class KgpDeprecationAnalyzer(
-    private val samPluginJar: File = locateSamPluginJar(),
+    private val samPluginJar: File = locatePluginJar("sam-with-receiver"),
+    private val assignmentPluginJar: File = locatePluginJar("assignment-compiler-plugin"),
 ) {
     fun analyze(
         script: File,
@@ -45,6 +47,8 @@ class KgpDeprecationAnalyzer(
             compilerOptions.append(
                 "-Xplugin=${samPluginJar.absolutePath}",
                 "-P", "plugin:org.jetbrains.kotlin.samWithReceiver:annotation=org.gradle.api.HasImplicitReceiver",
+                "-Xplugin=${assignmentPluginJar.absolutePath}",
+                "-P", "plugin:org.jetbrains.kotlin.assignment:annotation=org.gradle.api.SupportsKotlinAssignmentOverloading",
             )
         }
 
@@ -89,32 +93,62 @@ class KgpDeprecationAnalyzer(
             return if (start in 0 until end) message.substring(start + 1, end) else message.substringBefore('.')
         }
 
-        /** Blanks the leading top-level `plugins { … }` block, preserving newlines (line numbers). */
+        /**
+         * Blanks the leading top-level `plugins { … }` block, preserving newlines so line
+         * numbers are unchanged. Braces inside strings (`"…"`, `"""…"""`) and comments
+         * (`//`, `/* … */`) are ignored when matching the closing brace, so a `}` in a
+         * comment or string cannot end the block early. If no well-formed block is found
+         * the text is returned unchanged.
+         */
         internal fun stripPluginsBlock(text: String): String {
-            val match = Regex("(?m)^plugins\\s*\\{").find(text) ?: return text
+            val match = Regex("(?m)^[ \\t]*plugins[ \\t\\r\\n]*\\{").find(text) ?: return text
             val open = text.indexOf('{', match.range.first)
-            var depth = 0
-            var i = open
-            while (i < text.length) {
-                when (text[i]) {
-                    '{' -> depth++
-                    '}' -> if (--depth == 0) break
-                }
-                i++
-            }
-            if (depth != 0) return text
+            val end = matchingBrace(text, open) ?: return text
             val sb = StringBuilder(text)
-            for (j in match.range.first..i) {
+            for (j in match.range.first..end) {
                 if (sb[j] != '\n') sb.setCharAt(j, ' ')
             }
             return sb.toString()
         }
 
-        private fun locateSamPluginJar(): File =
+        /** Index of the `}` matching the `{` at [open], skipping strings and comments; null if unbalanced. */
+        private fun matchingBrace(text: String, open: Int): Int? {
+            var depth = 0
+            var i = open
+            while (i < text.length) {
+                val c = text[i]
+                when {
+                    text.startsWith("//", i) -> { i = text.indexOf('\n', i).let { if (it < 0) text.length else it }; continue }
+                    text.startsWith("/*", i) -> { i = text.indexOf("*/", i + 2).let { if (it < 0) text.length else it + 2 }; continue }
+                    text.startsWith("\"\"\"", i) -> { i = text.indexOf("\"\"\"", i + 3).let { if (it < 0) text.length else it + 3 }; continue }
+                    c == '"' -> { i = endOfStringLiteral(text, i); continue }
+                    c == '{' -> depth++
+                    c == '}' -> if (--depth == 0) return i
+                }
+                i++
+            }
+            return null
+        }
+
+        /** Index just past a closing `"` of a single-line string starting at [start], honouring `\` escapes. */
+        private fun endOfStringLiteral(text: String, start: Int): Int {
+            var i = start + 1
+            while (i < text.length) {
+                when (text[i]) {
+                    '\\' -> i++ // skip escaped char
+                    '"' -> return i + 1
+                    '\n' -> return i // unterminated; stop at line end
+                }
+                i++
+            }
+            return text.length
+        }
+
+        private fun locatePluginJar(nameFragment: String): File =
             System.getProperty("java.class.path")
                 .split(File.pathSeparator)
                 .map(::File)
-                .firstOrNull { it.name.contains("sam-with-receiver") }
-                ?: error("kotlin-sam-with-receiver compiler plugin jar not found on the classpath")
+                .firstOrNull { it.name.contains(nameFragment) }
+                ?: error("compiler plugin jar containing '$nameFragment' not found on the classpath")
     }
 }

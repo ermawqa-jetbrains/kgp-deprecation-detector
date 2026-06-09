@@ -28,10 +28,13 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-scripting-jvm:$engineVersion")
     implementation("org.jetbrains.kotlin:kotlin-scripting-jvm-host:$engineVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
-    // sam-with-receiver compiler plugin: rewrites Action<T> accessor params into
-    // T.() -> Unit receivers, which is what makes `kotlin { jvm { … } }` resolve.
-    // Passed to the script compile via -Xplugin; the jar is located on the runtime classpath.
+    // The two compiler plugins Gradle applies to .gradle.kts; both are passed to the script
+    // compile via -Xplugin (jars located on the runtime classpath):
+    //  - sam-with-receiver: Action<T> accessor params become T.() -> Unit receivers
+    //    (makes `kotlin { jvm { … } }` resolve);
+    //  - assignment: enables lazy-property assignment (`jvmTarget = JvmTarget.JVM_11`).
     implementation("org.jetbrains.kotlin:kotlin-sam-with-receiver-compiler-plugin-embeddable:$engineVersion")
+    implementation("org.jetbrains.kotlin:kotlin-assignment-compiler-plugin-embeddable:$engineVersion")
 
     // Gradle Tooling API: fetches each script's real classpath (incl. generated accessors)
     // and implicit imports via the KotlinBuildScriptModel tooling model.
