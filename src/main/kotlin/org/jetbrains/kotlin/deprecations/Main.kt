@@ -27,8 +27,13 @@ fun main(args: Array<String>) {
         ?.let { loadAllowlist(File(it)) ?: return } ?: emptySet()
     val gradleInstallation = args.getOrNull(2)?.takeIf { it.isNotBlank() }?.let(::File)
 
+    // Project build scripts only: settings/init scripts have a different receiver
+    // (Settings/Gradle, not Project) and are not analysed.
     val scripts = monorepoRoot.walkTopDown()
-        .filter { it.isFile && it.name.endsWith(".gradle.kts") }
+        .filter {
+            it.isFile && it.name.endsWith(".gradle.kts") &&
+                it.name != "settings.gradle.kts" && it.name != "init.gradle.kts"
+        }
         .toList()
 
     println("KGP deprecation check")
