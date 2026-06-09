@@ -89,6 +89,11 @@ Output groups findings by level (`ERROR` → `WARNING` → `HIDDEN`) with a care
   API that breaks Gradle config), no model — and no partial result — is produced. Such
   scripts are reported as `UNRESOLVED` and, by default, **fail the run (exit 2)** so
   incomplete coverage is never a silent pass; `-PallowUnresolved` downgrades that to a warning.
+- **Isolation is per Gradle build (root), not per script.** Scripts in *different* roots are
+  independent — a broken one only marks itself `UNRESOLVED`, others still report. But
+  *subprojects of one build* share configuration: a single broken subproject script aborts
+  that build's configuration, so its siblings also become `UNRESOLVED` (this is inherent —
+  Gradle itself can't configure the build either).
 - Driving Gradle per project is the cost of correctness; results are cacheable by Gradle.
 
 ## Build & test
