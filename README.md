@@ -38,13 +38,16 @@ For each `.gradle.kts`:
     -PmonorepoDir=/path/to/monorepo \
     [-Pallowlist=/path/to/allowlist.txt] \
     [-PgradleInstallation=/path/to/gradle] \
-    [-PkgpEngineVersion=2.4.20-dev-5677]
+    [-PkgpEngineVersion=2.4.20-dev-5677] \
+    [-PallowUnresolved]
 ```
 
 - **`monorepoDir`** — root to scan for `.gradle.kts` (default: `test-monorepo`).
 - **`allowlist`** — optional file; one deprecated-symbol signature per line, `#` comments.
   A finding whose signature is listed is suppressed.
 - **`gradleInstallation`** — optional; defaults to each project's own Gradle wrapper.
+- **`allowUnresolved`** — downgrade unanalysable scripts from a failure to a warning
+  (see exit codes below).
 - **`kgpEngineVersion`** — analysis compiler version (build-time, default `2.4.0`). **Must be
   ≥ the KGP version used in the scanned monorepo**, or KGP classes "compiled with a newer
   Kotlin" cannot be read. Dev versions resolve via the bundled JetBrains `kt/dev` repo.
@@ -63,8 +66,13 @@ KGP deprecation check
 KGP version(s) in scanned scripts: 2.4.0
 ```
 
-**Exit code:** `1` if any `ERROR`-level deprecation is found, else `0`. Output groups
-findings by level (`ERROR` → `WARNING` → `HIDDEN`) with a caret under each usage.
+**Exit codes:**
+- `0` — no `ERROR`-level deprecations (any `WARNING`/`HIDDEN` are reported but don't fail).
+- `1` — at least one `ERROR`-level deprecation.
+- `2` — one or more scripts could not be analysed (`UNRESOLVED`); coverage is incomplete.
+  Pass `-PallowUnresolved` to treat these as warnings and return `0` instead.
+
+Output groups findings by level (`ERROR` → `WARNING` → `HIDDEN`) with a caret under each usage.
 
 ## Scope and limits
 
@@ -75,9 +83,11 @@ findings by level (`ERROR` → `WARNING` → `HIDDEN`) with a caret under each u
   KGP-dominant. Filtering strictly to KGP packages would require descriptor access.
 - **Project build scripts only.** `settings.gradle.kts` / `init.gradle.kts` use a different
   receiver (`Settings` / `Gradle`) and are skipped; the implicit receiver is `Project`.
-- **`UNRESOLVED` scripts.** If a script already uses an `ERROR`-level deprecated API,
-  Gradle cannot model it (its own compile fails); such scripts are counted as
-  `UNRESOLVED` and reported as warnings, not silently dropped.
+- **`UNRESOLVED` scripts.** Resolution needs Gradle to compile the script; if it does not
+  compile (a real syntax/reference error, or it already uses an `ERROR`-level deprecated
+  API that breaks Gradle config), no model — and no partial result — is produced. Such
+  scripts are reported as `UNRESOLVED` and, by default, **fail the run (exit 2)** so
+  incomplete coverage is never a silent pass; `-PallowUnresolved` downgrades that to a warning.
 - Driving Gradle per project is the cost of correctness; results are cacheable by Gradle.
 
 ## Build & test

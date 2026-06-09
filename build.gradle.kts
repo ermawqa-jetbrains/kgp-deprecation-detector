@@ -53,6 +53,8 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     mainClass.set("org.jetbrains.kotlin.deprecations.MainKt")
     // Surface the analysis engine version in the tool's banner.
     systemProperty("kgp.engineVersion", engineVersion)
+    // -PallowUnresolved downgrades unanalysable scripts from a failure to a warning.
+    if (project.hasProperty("allowUnresolved")) systemProperty("kgp.allowUnresolved", "true")
 
     val monorepo = project.properties["monorepoDir"]?.toString()?.takeIf { it.isNotBlank() }
         ?: "test-monorepo"

@@ -81,9 +81,35 @@ fun main(args: Array<String>) {
     println()
 
     val reported = findings.filterNot { it.symbol in allowlist }
-    report(reported, monorepoRoot, unresolved)
+    report(reported, monorepoRoot)
 
-    if (reported.any { it.level == DeprecationLevel.ERROR }) exitProcess(1)
+    val errors = reported.count { it.level == DeprecationLevel.ERROR }
+    val warnings = reported.count { it.level == DeprecationLevel.WARNING }
+    val hidden = reported.count { it.level == DeprecationLevel.HIDDEN }
+    if (unresolved > 0) {
+        println("UNRESOLVED: $unresolved script(s) could not be modelled (see warnings above).")
+    }
+
+    // Exit policy: ERROR-level deprecation -> 1; otherwise an unanalysable script is not a
+    // silent pass -> 2, unless -PallowUnresolved downgrades it to a warning.
+    val allowUnresolved = System.getProperty("kgp.allowUnresolved") == "true"
+    when {
+        errors > 0 -> {
+            System.err.println("Result: FAIL — $errors ERROR-level deprecation(s) ($warnings WARNING, $hidden HIDDEN).")
+            exitProcess(1)
+        }
+        unresolved > 0 && !allowUnresolved -> {
+            System.err.println(
+                "Result: FAIL — $unresolved script(s) could not be analysed; coverage is incomplete. " +
+                    "Fix the script(s), or pass -PallowUnresolved to treat this as a warning.",
+            )
+            exitProcess(2)
+        }
+        else -> {
+            val ignored = if (unresolved > 0) " ($unresolved UNRESOLVED ignored)" else ""
+            println("Result: OK$ignored — no ERROR-level deprecations ($warnings WARNING, $hidden HIDDEN noted).")
+        }
+    }
 }
 
 /** Nearest ancestor (up to [stopAt]) containing a settings script; else the script's own dir. */
@@ -123,11 +149,9 @@ private fun loadAllowlist(file: File): Set<String>? {
         .toSet()
 }
 
-private fun report(findings: List<Finding>, monorepoRoot: File, unresolved: Int) {
+private fun report(findings: List<Finding>, monorepoRoot: File) {
     if (findings.isEmpty()) {
         println("No deprecated API usages found in resolved scripts.")
-        if (unresolved > 0) println("UNRESOLVED: $unresolved script(s) could not be modelled (see warnings above).")
-        println("Result: OK")
         return
     }
 
@@ -150,17 +174,7 @@ private fun report(findings: List<Finding>, monorepoRoot: File, unresolved: Int)
             }
         }
     }
-
     println("------------------------------------------------------------")
-    val errors = findings.count { it.level == DeprecationLevel.ERROR }
-    val warnings = findings.count { it.level == DeprecationLevel.WARNING }
-    val hidden = findings.count { it.level == DeprecationLevel.HIDDEN }
-    if (unresolved > 0) println("UNRESOLVED: $unresolved script(s) could not be modelled (see warnings above).")
-    if (errors > 0) {
-        System.err.println("Result: FAIL — $errors ERROR-level usage(s) ($warnings WARNING, $hidden HIDDEN).")
-    } else {
-        println("Result: OK — no ERROR-level usages ($warnings WARNING, $hidden HIDDEN noted).")
-    }
 }
 
 private fun sourceLineWithCaret(finding: Finding): List<String>? {
