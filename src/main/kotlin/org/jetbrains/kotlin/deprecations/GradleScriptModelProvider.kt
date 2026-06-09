@@ -9,6 +9,8 @@ sealed interface ScriptModelResult {
     data class Resolved(
         val classPath: List<File>,
         val implicitImports: List<String>,
+        /** KGP version this script resolves against, parsed from the classpath (null if absent). */
+        val kgpVersion: String?,
     ) : ScriptModelResult
 
     /**
@@ -37,9 +39,16 @@ object GradleScriptModelProvider {
                 val model = connection.model(KotlinBuildScriptModel::class.java)
                     .withArguments("-D$SCRIPT_PROPERTY=${script.absolutePath}")
                     .get()
-                ScriptModelResult.Resolved(model.classPath, model.implicitImports)
+                ScriptModelResult.Resolved(model.classPath, model.implicitImports, kgpVersionOf(model.classPath))
             }
         } catch (e: Exception) {
             ScriptModelResult.Failed(e.message ?: e.toString())
         }
+
+    // Matches e.g. kotlin-gradle-plugin-2.2.20-gradle813.jar or
+    // kotlin-gradle-plugin-api-2.4.0-dev-8644-gradle813.jar -> version is the capture group.
+    private val KGP_JAR = Regex("""kotlin-gradle-plugin(?:-api)?-(\d.+?)(?:-gradle\d+)?\.jar""")
+
+    private fun kgpVersionOf(classPath: List<File>): String? =
+        classPath.firstNotNullOfOrNull { KGP_JAR.find(it.name)?.groupValues?.get(1) }
 }

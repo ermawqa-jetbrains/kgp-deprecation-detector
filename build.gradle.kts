@@ -19,7 +19,7 @@ repositories {
 // compiler plugins Gradle uses. Its version MUST be >= the KGP metadata version in
 // the scanned monorepo, otherwise KGP classes "compiled with a newer Kotlin" cannot
 // be read. Override with -PkgpEngineVersion=<ver> to match the target monorepo.
-val engineVersion = (findProperty("kgpEngineVersion") as String?) ?: "2.2.20"
+val engineVersion = (findProperty("kgpEngineVersion") as String?) ?: "2.4.0"
 
 dependencies {
     // Kotlin scripting host: compiles each .gradle.kts the way Gradle does and surfaces
@@ -51,6 +51,8 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
         "reports deprecated API usages. Optional -Pallowlist=<file>, -PgradleInstallation=<dir>."
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass.set("org.jetbrains.kotlin.deprecations.MainKt")
+    // Surface the analysis engine version in the tool's banner.
+    systemProperty("kgp.engineVersion", engineVersion)
 
     val monorepo = project.properties["monorepoDir"]?.toString()?.takeIf { it.isNotBlank() }
         ?: "test-monorepo"

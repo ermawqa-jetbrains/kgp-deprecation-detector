@@ -4,7 +4,7 @@
 //
 // Run:  ./gradlew checkKgpDeprecations           (defaults to this fixture)
 plugins {
-    kotlin("multiplatform") version "2.2.20"
+    kotlin("multiplatform") version "2.4.0"
 }
 
 kotlin {

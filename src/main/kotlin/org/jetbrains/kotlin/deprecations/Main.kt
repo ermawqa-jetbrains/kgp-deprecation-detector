@@ -36,9 +36,11 @@ fun main(args: Array<String>) {
         }
         .toList()
 
+    val engineVersion = System.getProperty("kgp.engineVersion")?.takeIf { it.isNotBlank() }
     println("KGP deprecation check")
     println("  Scanning : ${monorepoRoot.path}")
     println("  Scripts  : ${scripts.size} .gradle.kts file(s)")
+    if (engineVersion != null) println("  Engine   : Kotlin $engineVersion (analysis compiler)")
     println("  Allowlist: ${if (allowlist.isEmpty()) "(none)" else "${allowlist.size} entries"}")
     println()
 
@@ -50,12 +52,15 @@ fun main(args: Array<String>) {
 
     val analyzer = KgpDeprecationAnalyzer()
     val findings = mutableListOf<Finding>()
+    val kgpVersions = sortedSetOf<String>()
     var unresolved = 0
     for (script in scripts) {
         val projectDir = findGradleRoot(script, monorepoRoot)
         when (val model = GradleScriptModelProvider.fetch(projectDir, script, gradleInstallation)) {
-            is ScriptModelResult.Resolved ->
+            is ScriptModelResult.Resolved -> {
+                model.kgpVersion?.let(kgpVersions::add)
                 findings += analyzer.analyze(script, model.classPath, model.implicitImports)
+            }
             is ScriptModelResult.Failed -> {
                 unresolved++
                 System.err.println(
@@ -65,6 +70,15 @@ fun main(args: Array<String>) {
             }
         }
     }
+
+    println("KGP version(s) in scanned scripts: ${if (kgpVersions.isEmpty()) "(none detected)" else kgpVersions.joinToString(", ")}")
+    if (engineVersion != null && kgpVersions.any { versionLessThan(engineVersion, it) }) {
+        System.err.println(
+            "  ! engine $engineVersion is older than a scanned KGP version — results may be incomplete; " +
+                "rerun with -PkgpEngineVersion >= ${kgpVersions.last()}",
+        )
+    }
+    println()
 
     val reported = findings.filterNot { it.symbol in allowlist }
     report(reported, monorepoRoot, unresolved)
@@ -81,6 +95,21 @@ private fun findGradleRoot(script: File, stopAt: File): File {
         dir = dir.parentFile
     }
     return script.parentFile
+}
+
+/** Leading numeric components of a version ("2.4.0-dev-8644" -> [2,4,0]). */
+private fun numericParts(v: String): List<Int> =
+    v.takeWhile { it.isDigit() || it == '.' }.split('.').mapNotNull { it.toIntOrNull() }
+
+private fun versionLessThan(a: String, b: String): Boolean {
+    val pa = numericParts(a)
+    val pb = numericParts(b)
+    for (i in 0 until maxOf(pa.size, pb.size)) {
+        val x = pa.getOrElse(i) { 0 }
+        val y = pb.getOrElse(i) { 0 }
+        if (x != y) return x < y
+    }
+    return false
 }
 
 private fun loadAllowlist(file: File): Set<String>? {
