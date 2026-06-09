@@ -38,16 +38,30 @@ For each `.gradle.kts`:
     -PmonorepoDir=/path/to/monorepo \
     [-Pallowlist=/path/to/allowlist.txt] \
     [-PgradleInstallation=/path/to/gradle] \
-    [-PkgpEngineVersion=2.2.20]
+    [-PkgpEngineVersion=2.4.20-dev-5677]
 ```
 
 - **`monorepoDir`** — root to scan for `.gradle.kts` (default: `test-monorepo`).
 - **`allowlist`** — optional file; one deprecated-symbol signature per line, `#` comments.
   A finding whose signature is listed is suppressed.
 - **`gradleInstallation`** — optional; defaults to each project's own Gradle wrapper.
-- **`kgpEngineVersion`** — analysis compiler version (build-time). **Must be ≥ the KGP
-  version used in the scanned monorepo**, or KGP classes "compiled with a newer Kotlin"
-  cannot be read. Default `2.2.20`.
+- **`kgpEngineVersion`** — analysis compiler version (build-time, default `2.4.0`). **Must be
+  ≥ the KGP version used in the scanned monorepo**, or KGP classes "compiled with a newer
+  Kotlin" cannot be read. Dev versions resolve via the bundled JetBrains `kt/dev` repo.
+
+The run prints the **analysis engine version** and the **KGP version(s)** detected in the
+scanned scripts (parsed from each script's classpath), and warns if the engine is older
+than a scanned KGP version:
+
+```
+KGP deprecation check
+  Scanning : …/test-monorepo
+  Scripts  : 1 .gradle.kts file(s)
+  Engine   : Kotlin 2.4.0 (analysis compiler)
+  Allowlist: (none)
+
+KGP version(s) in scanned scripts: 2.4.0
+```
 
 **Exit code:** `1` if any `ERROR`-level deprecation is found, else `0`. Output groups
 findings by level (`ERROR` → `WARNING` → `HIDDEN`) with a caret under each usage.
@@ -59,8 +73,8 @@ findings by level (`ERROR` → `WARNING` → `HIDDEN`) with a caret under each u
 - **All resolved deprecations, not KGP-only.** Findings come from compiler diagnostics,
   which don't carry the symbol's package; in practice Kotlin build scripts are
   KGP-dominant. Filtering strictly to KGP packages would require descriptor access.
-- **Receiver is `Project`.** `settings.gradle.kts` / `init.gradle.kts` use different
-  receivers and are not yet special-cased.
+- **Project build scripts only.** `settings.gradle.kts` / `init.gradle.kts` use a different
+  receiver (`Settings` / `Gradle`) and are skipped; the implicit receiver is `Project`.
 - **`UNRESOLVED` scripts.** If a script already uses an `ERROR`-level deprecated API,
   Gradle cannot model it (its own compile fails); such scripts are counted as
   `UNRESOLVED` and reported as warnings, not silently dropped.
