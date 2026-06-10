@@ -11,7 +11,9 @@ import kotlin.system.exitProcess
  *  - allowlist-file: one deprecated-symbol signature per line; `#` starts a comment.
  *  - gradle-installation-dir: optional; defaults to each project's own Gradle wrapper.
  *
- * Exit 1 if any ERROR-level deprecation is found, else 0.
+ * Exit 1 if any ERROR-level deprecation is found,
+ * Exit 2 if any unresolved symbol
+ * else 0.
  */
 fun main(args: Array<String>) {
     if (args.isEmpty() || args[0].isBlank()) {
