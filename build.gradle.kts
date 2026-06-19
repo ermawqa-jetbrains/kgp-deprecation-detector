@@ -41,7 +41,21 @@ dependencies {
     implementation("org.gradle:gradle-tooling-api:9.4.0")
     runtimeOnly("org.slf4j:slf4j-simple:2.0.13")
 
+    // ASM: reads @Deprecated members out of the KGP jars (no class loading) to build the
+    // name index for the Groovy heuristic pass. Groovy is dynamically typed and cannot be
+    // resolved by a frontend, so that pass is name-matching, not resolution.
+    implementation("org.ow2.asm:asm:9.7")
+
     testImplementation(kotlin("test"))
+}
+
+// The Groovy heuristic pass needs the actual KGP jars (for the engine version) to know which
+// API names are deprecated. Resolve them as a separate configuration and hand their paths to
+// the tool; mavenCentral + kt/dev (above) cover stable and dev versions.
+val kgpJars by configurations.creating
+dependencies {
+    kgpJars("org.jetbrains.kotlin:kotlin-gradle-plugin:$engineVersion")
+    kgpJars("org.jetbrains.kotlin:kotlin-gradle-plugin-api:$engineVersion")
 }
 
 // Each script's KGP classpath is obtained from Gradle itself (the KotlinBuildScriptModel
@@ -58,6 +72,13 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     systemProperty("kgp.engineVersion", engineVersion)
     // -PallowUnresolved downgrades unanalysable scripts from a failure to a warning.
     if (project.hasProperty("allowUnresolved")) systemProperty("kgp.allowUnresolved", "true")
+
+    // Groovy heuristic pass: KGP jars for the name index; on by default, non-gating by default.
+    systemProperty("kgp.pluginJars", kgpJars.files.joinToString(File.pathSeparator))
+    if (project.findProperty("scanGroovy") == "false") systemProperty("kgp.scanGroovy", "false")
+    if (project.hasProperty("groovyGating")) systemProperty("kgp.groovyGating", "true")
+    project.properties["groovyScanRoot"]?.toString()?.takeIf { it.isNotBlank() }
+        ?.let { systemProperty("kgp.groovyScanRoot", it) }
 
     val monorepo = project.properties["monorepoDir"]?.toString()?.takeIf { it.isNotBlank() }
         ?: "test-monorepo"

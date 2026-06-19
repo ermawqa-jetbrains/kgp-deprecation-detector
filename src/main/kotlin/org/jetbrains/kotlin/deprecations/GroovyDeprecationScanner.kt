@@ -1,0 +1,136 @@
+package org.jetbrains.kotlin.deprecations
+
+/**
+ * Heuristic, name-based matcher for **Groovy** scripts, which are dynamically typed and
+ * therefore impossible to resolve with any frontend. Given the deprecated-API [index]
+ * (from [KgpDeprecationExtractor]), it whole-word matches each deprecated name in masked
+ * script text and emits [Finding]s tagged [FindingSource.HEURISTIC].
+ *
+ * This deliberately re-introduces the pre-rebuild text-matching approach, but scoped to
+ * Groovy only and kept off the resolution pass's zero-false-positive CI gate. Comments
+ * and string/char literals are masked first so a name inside them is never matched.
+ */
+class GroovyDeprecationScanner(index: List<DeprecatedSymbol>) {
+
+    // One whole-word pattern per searchable term. Terms shorter than 4 chars and the
+    // JVM ctor/clinit names are dropped to keep generic-name noise down.
+    private val searchIndex: List<Pair<Regex, DeprecatedSymbol>> = index
+        .flatMap { symbol -> setOfNotNull(symbol.searchName, symbol.memberName).map { it to symbol } }
+        .filter { (term, _) -> term.isNotBlank() && term != "<init>" && term != "<clinit>" && term.length >= 4 }
+        .map { (term, symbol) -> Regex("\\b${Regex.escape(term)}\\b") to symbol }
+
+    /**
+     * Scan one Groovy script [text]. [lineOffset]/[colOffset] are the 1-based position of
+     * the text's first character in [file] (use `1, 1` for a standalone `.gradle` file;
+     * an embedded script passes the host literal's start position so reported locations
+     * point into the `.kt`/`.java`).
+     */
+    fun scanText(text: String, file: String, lineOffset: Int, colOffset: Int): List<Finding> {
+        val masked = maskCommentsAndStrings(text).lines()
+        val findings = mutableListOf<Finding>()
+        val seen = mutableSetOf<Pair<Int, String>>() // (absoluteLine, qualifiedName)
+
+        masked.forEachIndexed { idx, maskedLine ->
+            val contentLine = idx + 1 // 1-based within text
+            val absoluteLine = lineOffset + contentLine - 1
+            for ((pattern, symbol) in searchIndex) {
+                val match = pattern.find(maskedLine) ?: continue
+                if (!seen.add(absoluteLine to symbol.qualifiedName)) continue
+                val matchCol = match.range.first + 1 // 1-based within content line
+                val absoluteCol = if (contentLine == 1) colOffset + matchCol - 1 else matchCol
+                findings += Finding(
+                    file = file,
+                    line = absoluteLine,
+                    column = absoluteCol,
+                    symbol = symbol.qualifiedName,
+                    level = symbol.level,
+                    message = symbol.message,
+                    source = FindingSource.HEURISTIC,
+                )
+            }
+        }
+        return findings
+    }
+}
+
+/**
+ * Replace comments and string/char literals with spaces while preserving line structure
+ * (newlines kept; line/column offsets unchanged). Handles Kotlin and Groovy syntax: `//`
+ * line comments, `/* */` block comments, `"…"`, `"""…"""`, `'…'`, `'''…'''`. Limitation:
+ * string-template `${…}` contents are masked along with the surrounding string; nested
+ * block comments are not supported.
+ */
+internal fun maskCommentsAndStrings(src: String): String {
+    val out = StringBuilder(src.length)
+    var i = 0
+    val n = src.length
+    while (i < n) {
+        val c = src[i]
+        val next = if (i + 1 < n) src[i + 1] else ' '
+
+        when {
+            c == '/' && next == '/' -> {
+                while (i < n && src[i] != '\n') {
+                    out.append(' ')
+                    i++
+                }
+            }
+            c == '/' && next == '*' -> {
+                out.append("  "); i += 2
+                while (i < n) {
+                    if (i + 1 < n && src[i] == '*' && src[i + 1] == '/') {
+                        out.append("  "); i += 2; break
+                    }
+                    out.append(if (src[i] == '\n') '\n' else ' ')
+                    i++
+                }
+            }
+            c == '"' && i + 2 < n && src[i + 1] == '"' && src[i + 2] == '"' -> {
+                out.append("   "); i += 3
+                while (i < n) {
+                    if (i + 2 < n && src[i] == '"' && src[i + 1] == '"' && src[i + 2] == '"') {
+                        out.append("   "); i += 3; break
+                    }
+                    out.append(if (src[i] == '\n') '\n' else ' ')
+                    i++
+                }
+            }
+            c == '"' -> {
+                out.append(' '); i++
+                while (i < n && src[i] != '"' && src[i] != '\n') {
+                    if (src[i] == '\\' && i + 1 < n) {
+                        out.append("  "); i += 2
+                    } else {
+                        out.append(' '); i++
+                    }
+                }
+                if (i < n && src[i] == '"') { out.append(' '); i++ }
+            }
+            c == '\'' && i + 2 < n && src[i + 1] == '\'' && src[i + 2] == '\'' -> {
+                out.append("   "); i += 3
+                while (i < n) {
+                    if (i + 2 < n && src[i] == '\'' && src[i + 1] == '\'' && src[i + 2] == '\'') {
+                        out.append("   "); i += 3; break
+                    }
+                    out.append(if (src[i] == '\n') '\n' else ' ')
+                    i++
+                }
+            }
+            c == '\'' -> {
+                out.append(' '); i++
+                while (i < n && src[i] != '\'' && src[i] != '\n') {
+                    if (src[i] == '\\' && i + 1 < n) {
+                        out.append("  "); i += 2
+                    } else {
+                        out.append(' '); i++
+                    }
+                }
+                if (i < n && src[i] == '\'') { out.append(' '); i++ }
+            }
+            else -> {
+                out.append(c); i++
+            }
+        }
+    }
+    return out.toString()
+}

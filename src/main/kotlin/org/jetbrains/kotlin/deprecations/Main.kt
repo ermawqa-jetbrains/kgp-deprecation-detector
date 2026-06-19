@@ -47,9 +47,7 @@ fun main(args: Array<String>) {
     println()
 
     if (scripts.isEmpty()) {
-        println("No .gradle.kts files found.")
-        println("Result: OK")
-        return
+        println("No .gradle.kts files found (resolution pass has nothing to do).")
     }
 
     val analyzer = KgpDeprecationAnalyzer()
@@ -82,36 +80,87 @@ fun main(args: Array<String>) {
     }
     println()
 
-    val reported = findings.filterNot { it.symbol in allowlist }
+    // Groovy heuristic pass (separate, non-gating by default). On by default; -PscanGroovy=false
+    // turns it off. Groovy is dynamically typed and cannot be resolved, so this is name-matching.
+    val groovyFindings =
+        if (System.getProperty("kgp.scanGroovy", "true") == "true") runGroovyPass(monorepoRoot)
+        else emptyList()
+
+    val reported = (findings + groovyFindings).filterNot { it.symbol in allowlist }
     report(reported, monorepoRoot)
 
-    val errors = reported.count { it.level == DeprecationLevel.ERROR }
-    val warnings = reported.count { it.level == DeprecationLevel.WARNING }
-    val hidden = reported.count { it.level == DeprecationLevel.HIDDEN }
+    val resolved = reported.filter { it.source == FindingSource.RESOLVED }
+    val heuristic = reported.filter { it.source == FindingSource.HEURISTIC }
+    val errors = resolved.count { it.level == DeprecationLevel.ERROR }
+    val warnings = resolved.count { it.level == DeprecationLevel.WARNING }
+    val hidden = resolved.count { it.level == DeprecationLevel.HIDDEN }
+    val heuristicErrors = heuristic.count { it.level == DeprecationLevel.ERROR }
     if (unresolved > 0) {
         println("UNRESOLVED: $unresolved script(s) could not be modelled (see warnings above).")
     }
 
-    // Exit policy: ERROR-level deprecation -> 1; otherwise an unanalysable script is not a
-    // silent pass -> 2, unless -PallowUnresolved downgrades it to a warning.
+    // Exit policy. The resolved pass owns the gate: ERROR-level deprecation -> 1; an unanalysable
+    // script is not a silent pass -> 2 (unless -PallowUnresolved). Groovy heuristic findings are
+    // NON-gating by default; -PgroovyGating makes a heuristic ERROR also fail (after resolved checks).
     val allowUnresolved = System.getProperty("kgp.allowUnresolved") == "true"
+    val groovyGating = System.getProperty("kgp.groovyGating") == "true"
+    val groovyNote = if (heuristic.isNotEmpty()) " — ${heuristic.size} Groovy heuristic finding(s) noted" else ""
     when {
         errors > 0 -> {
-            System.err.println("Result: FAIL — $errors ERROR-level deprecation(s) ($warnings WARNING, $hidden HIDDEN).")
+            System.err.println("Result: FAIL — $errors ERROR-level deprecation(s) ($warnings WARNING, $hidden HIDDEN).$groovyNote")
             exitProcess(1)
         }
         unresolved > 0 && !allowUnresolved -> {
             System.err.println(
                 "Result: FAIL — $unresolved script(s) could not be analysed; coverage is incomplete. " +
-                    "Fix the script(s), or pass -PallowUnresolved to treat this as a warning.",
+                    "Fix the script(s), or pass -PallowUnresolved to treat this as a warning.$groovyNote",
             )
             exitProcess(2)
         }
+        groovyGating && heuristicErrors > 0 -> {
+            System.err.println("Result: FAIL — $heuristicErrors ERROR-level Groovy heuristic match(es) (-PgroovyGating on).")
+            exitProcess(1)
+        }
         else -> {
             val ignored = if (unresolved > 0) " ($unresolved UNRESOLVED ignored)" else ""
-            println("Result: OK$ignored — no ERROR-level deprecations ($warnings WARNING, $hidden HIDDEN noted).")
+            println("Result: OK$ignored — no ERROR-level deprecations ($warnings WARNING, $hidden HIDDEN noted).$groovyNote")
         }
     }
+}
+
+/**
+ * Name-matches deprecated KGP APIs in Groovy scripts: standalone `.gradle` files and Groovy
+ * scripts embedded as string literals in `.kt`/`.java`. The deprecated-name index is built once
+ * from the KGP jars passed via `kgp.pluginJars`. Skipped (with a notice) if no jars are provided.
+ */
+private fun runGroovyPass(monorepoRoot: File): List<Finding> {
+    val jars = System.getProperty("kgp.pluginJars").orEmpty()
+        .split(File.pathSeparator).filter { it.isNotBlank() }
+    if (jars.isEmpty()) {
+        System.err.println("  ! Groovy pass skipped: no KGP jars provided (kgp.pluginJars).")
+        return emptyList()
+    }
+    val index = jars.flatMap { runCatching { KgpDeprecationExtractor.extract(it) }.getOrDefault(emptyList()) }
+    if (index.isEmpty()) {
+        System.err.println("  ! Groovy pass skipped: no @Deprecated symbols found in the KGP jars.")
+        return emptyList()
+    }
+    val scanRoot = System.getProperty("kgp.groovyScanRoot")?.takeIf { it.isNotBlank() }?.let(::File) ?: monorepoRoot
+    val scanner = GroovyDeprecationScanner(index)
+    val findings = mutableListOf<Finding>()
+    var scanned = 0
+    for (file in GroovySourceFinder.candidates(scanRoot)) {
+        scanned++
+        when (file.extension) {
+            "gradle" -> runCatching { scanner.scanText(file.readText(), file.path, 1, 1) }
+                .getOrDefault(emptyList()).let(findings::addAll)
+            "kt", "java" -> EmbeddedGroovyScriptExtractor.extract(file).forEach { s ->
+                findings += scanner.scanText(s.text, file.path, s.startLine, s.startColumn)
+            }
+        }
+    }
+    println("Groovy heuristic pass: ${index.size} deprecated name(s), $scanned candidate file(s) scanned.")
+    return findings
 }
 
 /** Nearest ancestor (up to [stopAt]) containing a settings script; else the script's own dir. */
@@ -152,13 +201,27 @@ private fun loadAllowlist(file: File): Set<String>? {
 }
 
 private fun report(findings: List<Finding>, monorepoRoot: File) {
-    if (findings.isEmpty()) {
+    val resolved = findings.filter { it.source == FindingSource.RESOLVED }
+    val heuristic = findings.filter { it.source == FindingSource.HEURISTIC }
+
+    if (resolved.isEmpty()) {
         println("No deprecated API usages found in resolved scripts.")
-        return
+    } else {
+        printSection("Resolved (.gradle.kts) — compiler-verified", resolved, monorepoRoot)
     }
 
+    if (heuristic.isNotEmpty()) {
+        println()
+        printSection(
+            "HEURISTIC — Groovy scripts (name-match only, review required; not gating)",
+            heuristic, monorepoRoot,
+        )
+    }
+}
+
+private fun printSection(title: String, findings: List<Finding>, monorepoRoot: File) {
     val affected = findings.map { it.file }.toSet().size
-    println("Found ${findings.size} deprecated usage(s) in $affected file(s):")
+    println("$title — ${findings.size} usage(s) in $affected file(s):")
     println("------------------------------------------------------------")
 
     for (level in listOf(DeprecationLevel.ERROR, DeprecationLevel.WARNING, DeprecationLevel.HIDDEN)) {
@@ -193,4 +256,5 @@ private fun printUsage() {
     System.err.println()
     System.err.println("As a Gradle task:")
     System.err.println("  ./gradlew checkKgpDeprecations [-PmonorepoDir=<path>] [-Pallowlist=<path>] [-PkgpEngineVersion=<ver>]")
+    System.err.println("    Groovy heuristic pass (separate, non-gating): [-PscanGroovy=false] [-PgroovyGating] [-PgroovyScanRoot=<path>]")
 }

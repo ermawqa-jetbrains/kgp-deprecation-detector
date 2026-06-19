@@ -96,6 +96,31 @@ Output groups findings by level (`ERROR` → `WARNING` → `HIDDEN`) with a care
   Gradle itself can't configure the build either).
 - Driving Gradle per project is the cost of correctness; results are cacheable by Gradle.
 
+## Groovy heuristic pass
+
+KGP deprecations also appear in **Groovy** scripts — IDE-injected Gradle init scripts hardcoded
+as string literals inside `.kt`/`.java`, and standalone `.gradle` files. Groovy is **dynamically
+typed**, so `compilation.defaultSourceSetName` has no static receiver and **no frontend can resolve
+it** (Gradle only warns at runtime). The resolution pass above therefore cannot see these.
+
+A separate, opt-out **heuristic pass** covers them by **name matching** (the deprecated-API names are
+read from the KGP jars with ASM). It runs by default and:
+
+- reports its findings in a clearly-labelled `HEURISTIC` section, **separate** from the resolved
+  findings, and **never changes the exit code** (so the zero-false-positive CI gate stays clean);
+- discovers files fast via ripgrep (`rg` on the `PATH` is recommended; falls back to an in-process
+  walk), scanning `.kt`/`.java`/`.gradle` under `-PgroovyScanRoot` (default: `monorepoDir`).
+
+Because it is name-matching (not resolution), it **has false positives** — a deprecated KGP name and
+an unrelated same-named symbol are indistinguishable, and generic names (`project`, `target`, …) match
+broadly. That is the inherent cost of covering dynamic Groovy; treat the section as "review required",
+and use the allowlist to silence confirmed non-issues.
+
+Flags:
+- **`-PscanGroovy=false`** — disable the pass entirely.
+- **`-PgroovyGating`** — make `ERROR`-level heuristic matches also fail the run (exit 1). Off by default.
+- **`-PgroovyScanRoot=<path>`** — scan a different root than `monorepoDir`.
+
 ## Build & test
 
 ```bash
