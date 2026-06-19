@@ -83,9 +83,11 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     val monorepo = project.properties["monorepoDir"]?.toString()?.takeIf { it.isNotBlank() }
         ?: "test-monorepo"
     val allowlistArg = project.properties["allowlist"]?.toString().orEmpty()
-    // Default to the Gradle running this build, so the task works against the bundled
-    // test-monorepo fixture with no extra flags and no wrapper in the fixture.
-    val gradleInstallationArg = project.properties["gradleInstallation"]?.toString()?.takeIf { it.isNotBlank() }
-        ?: gradle.gradleHomeDir?.absolutePath.orEmpty()
+    // Default to the Gradle running this build only for the built-in test-monorepo fixture
+    // (which has no wrapper). For external monorepos pass -PgradleInstallation= (empty) or
+    // omit it entirely and the Tooling API will use each project's own wrapper.
+    val gradleInstallationArg =
+        project.properties["gradleInstallation"]?.toString()?.takeIf { it.isNotBlank() }
+            ?: if (monorepo == "test-monorepo") gradle.gradleHomeDir?.absolutePath.orEmpty() else ""
     args = listOf(monorepo, allowlistArg, gradleInstallationArg)
 }
