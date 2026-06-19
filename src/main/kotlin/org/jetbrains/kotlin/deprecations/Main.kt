@@ -59,7 +59,14 @@ fun main(args: Array<String>) {
         when (val model = GradleScriptModelProvider.fetch(projectDir, script, gradleInstallation)) {
             is ScriptModelResult.Resolved -> {
                 model.kgpVersion?.let(kgpVersions::add)
-                findings += analyzer.analyze(script, model.classPath, model.implicitImports)
+                try {
+                    findings += analyzer.analyze(script, model.classPath, model.implicitImports)
+                } catch (e: Exception) {
+                    unresolved++
+                    System.err.println(
+                        "  ! could not analyse ${script.relativeTo(monorepoRoot).path}: ${e.message?.lineSequence()?.first()}",
+                    )
+                }
             }
             is ScriptModelResult.Failed -> {
                 unresolved++
