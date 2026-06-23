@@ -76,6 +76,8 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     // Groovy heuristic pass: KGP jars for the name index; on by default, non-gating by default.
     systemProperty("kgp.pluginJars", kgpJars.files.joinToString(File.pathSeparator))
     if (project.findProperty("scanGroovy") == "false") systemProperty("kgp.scanGroovy", "false")
+    project.properties["excludePatterns"]?.toString()?.takeIf { it.isNotBlank() }
+        ?.let { systemProperty("kgp.excludePatterns", it) }
     if (project.hasProperty("groovyGating")) systemProperty("kgp.groovyGating", "true")
     project.properties["groovyScanRoot"]?.toString()?.takeIf { it.isNotBlank() }
         ?.let { systemProperty("kgp.groovyScanRoot", it) }

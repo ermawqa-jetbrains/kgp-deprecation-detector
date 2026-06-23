@@ -29,12 +29,16 @@ fun main(args: Array<String>) {
         ?.let { loadAllowlist(File(it)) ?: return } ?: emptySet()
     val gradleInstallation = args.getOrNull(2)?.takeIf { it.isNotBlank() }?.let(::File)
 
+    val excludePatterns = System.getProperty("kgp.excludePatterns").orEmpty()
+        .split(',').map { it.trim() }.filter { it.isNotBlank() }
+
     // Project build scripts only: settings/init scripts have a different receiver
     // (Settings/Gradle, not Project) and are not analysed.
     val scripts = monorepoRoot.walkTopDown()
         .filter {
             it.isFile && it.name.endsWith(".gradle.kts") &&
-                it.name != "settings.gradle.kts" && it.name != "init.gradle.kts"
+                it.name != "settings.gradle.kts" && it.name != "init.gradle.kts" &&
+                excludePatterns.none { pat -> it.path.contains(pat) }
         }
         .toList()
 
@@ -44,6 +48,7 @@ fun main(args: Array<String>) {
     println("  Scripts  : ${scripts.size} .gradle.kts file(s)")
     if (engineVersion != null) println("  Engine   : Kotlin $engineVersion (analysis compiler)")
     println("  Allowlist: ${if (allowlist.isEmpty()) "(none)" else "${allowlist.size} entries"}")
+    if (excludePatterns.isNotEmpty()) println("  Excluded : ${excludePatterns.joinToString(", ")}")
     println()
 
     if (scripts.isEmpty()) {
@@ -90,7 +95,7 @@ fun main(args: Array<String>) {
     // Groovy heuristic pass (separate, non-gating by default). On by default; -PscanGroovy=false
     // turns it off. Groovy is dynamically typed and cannot be resolved, so this is name-matching.
     val groovyFindings =
-        if (System.getProperty("kgp.scanGroovy", "true") == "true") runGroovyPass(monorepoRoot)
+        if (System.getProperty("kgp.scanGroovy", "true") == "true") runGroovyPass(monorepoRoot, excludePatterns)
         else emptyList()
 
     val reported = (findings + groovyFindings).filterNot { it.symbol in allowlist }
@@ -140,7 +145,7 @@ fun main(args: Array<String>) {
  * scripts embedded as string literals in `.kt`/`.java`. The deprecated-name index is built once
  * from the KGP jars passed via `kgp.pluginJars`. Skipped (with a notice) if no jars are provided.
  */
-private fun runGroovyPass(monorepoRoot: File): List<Finding> {
+private fun runGroovyPass(monorepoRoot: File, excludePatterns: List<String> = emptyList()): List<Finding> {
     val jars = System.getProperty("kgp.pluginJars").orEmpty()
         .split(File.pathSeparator).filter { it.isNotBlank() }
     if (jars.isEmpty()) {
@@ -156,7 +161,7 @@ private fun runGroovyPass(monorepoRoot: File): List<Finding> {
     val scanner = GroovyDeprecationScanner(index)
     val findings = mutableListOf<Finding>()
     var scanned = 0
-    for (file in GroovySourceFinder.candidates(scanRoot)) {
+    for (file in GroovySourceFinder.candidates(scanRoot, excludePatterns)) {
         scanned++
         when (file.extension) {
             "gradle" -> runCatching { scanner.scanText(file.readText(), file.path, 1, 1) }
