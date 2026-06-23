@@ -32,7 +32,7 @@ fun main(args: Array<String>) {
     // Test-fixture build scripts (under testData/testResources/resources) are never real,
     // standalone-buildable projects — they exist as inputs to other tests. Exclude them by
     // default; -PexcludePatterns adds more path substrings on top.
-    val defaultExcludes = listOf("/testData/", "/testdata/", "/testResources/", "/resources/")
+    val defaultExcludes = listOf("/testData/", "/testdata/", "/testResources/", "/testSources/", "/testSrc/", "/tests/", "/integration-tests/", "/agpIntegrationTestSrc/", "/resources/")
     val userExcludes = System.getProperty("kgp.excludePatterns").orEmpty()
         .split(',').map { it.trim() }.filter { it.isNotBlank() }
     val excludePatterns = (defaultExcludes + userExcludes).distinct()
