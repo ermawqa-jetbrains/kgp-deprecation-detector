@@ -49,8 +49,9 @@ For each `.gradle.kts`:
   A finding whose signature is listed is suppressed.
 - **`gradleInstallation`** — optional; defaults to each project's own Gradle wrapper.
 - **`excludePatterns`** — comma-separated path substrings to skip, *added on top of* the
-  built-in defaults (`/testData/`, `/testdata/`, `/testResources/`, `/resources/`) which drop
-  test-fixture scripts that are never standalone-buildable projects.
+  built-in defaults (`/testData/`, `/testdata/`, `/testResources/`, `/testSources/`,
+  `/testSrc/`, `/tests/`, `/integration-tests/`, `/agpIntegrationTestSrc/`, `/resources/`)
+  which drop test-fixture scripts that are never standalone-buildable projects.
 - **`allowUnresolved`** — downgrade unanalysable scripts from a failure to a warning
   (see exit codes below).
 - **`kgpEngineVersion`** — analysis compiler version (build-time, default `2.4.0`). **Must be
@@ -81,8 +82,10 @@ Output groups findings by level (`ERROR` → `WARNING` → `HIDDEN`) with a care
 
 ## Scope and limits
 
-- **`.gradle.kts` only.** Groovy `.gradle` is out of scope (resolution needs the Kotlin
-  frontend).
+- **`.gradle.kts` is resolved; Groovy is heuristic.** The resolution pass (zero false
+  positives) covers `.gradle.kts` only — full resolution needs the Kotlin frontend. Groovy
+  scripts are covered by a separate, non-gating name-matching pass (see *Groovy heuristic
+  pass* below), because Groovy is dynamically typed and cannot be resolved.
 - **All resolved deprecations, not KGP-only.** Findings come from compiler diagnostics,
   which don't carry the symbol's package; in practice Kotlin build scripts are
   KGP-dominant. Filtering strictly to KGP packages would require descriptor access.
@@ -93,11 +96,13 @@ Output groups findings by level (`ERROR` → `WARNING` → `HIDDEN`) with a care
   API that breaks Gradle config), no model — and no partial result — is produced. Such
   scripts are reported as `UNRESOLVED` and, by default, **fail the run (exit 2)** so
   incomplete coverage is never a silent pass; `-PallowUnresolved` downgrades that to a warning.
-- **No settings root → fast-skipped as `UNRESOLVED`.** A script with no `settings.gradle(.kts)`
-  in any ancestor (up to `monorepoDir`) is a subproject of a build whose settings are not
-  checked in — e.g. a Bazel-driven composite, or a script using `project(":…")`/convention
-  plugins it cannot see in isolation. Configuring it standalone always fails, so it is skipped
-  **without** booting Gradle (no per-script distribution download), keeping runs fast.
+- **No settings root / no wrapper → fast-skipped as `UNRESOLVED`.** Two cheap pre-checks skip
+  scripts that can never be configured, *without* booting Gradle (no per-script distribution
+  download): (a) no `settings.gradle(.kts)` in any ancestor up to `monorepoDir` — a subproject
+  of a build whose settings are not checked in (e.g. a Bazel-driven composite, or a script
+  using `project(":…")`/convention plugins it cannot see in isolation); (b) a settings root
+  with no `gradle/wrapper/gradle-wrapper.properties` (and no `-PgradleInstallation`), which
+  would otherwise make Gradle download a default distribution and fail.
 - **Isolation is per Gradle build (root), not per script.** Scripts in *different* roots are
   independent — a broken one only marks itself `UNRESOLVED`, others still report. But
   *subprojects of one build* share configuration: a single broken subproject script aborts
