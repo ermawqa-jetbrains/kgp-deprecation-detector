@@ -24,7 +24,7 @@ data class EmbeddedScript(
 object EmbeddedGroovyScriptExtractor {
 
     private val SCRIPT_MARKER = Regex(
-        "allprojects|afterEvaluate|tasks\\.(create|register)|gradle\\.|pluginManager|GradleVersion",
+        "allprojects|afterEvaluate|tasks\\.(create|register)|gradle\\.(ext|rootProject|settingsEvaluated|buildFinished)|pluginManager|GradleVersion",
     )
 
     fun extract(file: File): List<EmbeddedScript> = extractFromText(file.readText())
