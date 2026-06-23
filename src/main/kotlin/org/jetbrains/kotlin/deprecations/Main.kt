@@ -67,13 +67,19 @@ fun main(args: Array<String>) {
     for (script in scripts) {
         val projectDir = findGradleRoot(script, monorepoRoot)
         if (projectDir == null) {
-            // No settings.gradle(.kts) anywhere above the script: it is a subproject of a build
-            // whose settings are not checked in (e.g. a Bazel-driven composite, or a script that
-            // references project(":…") / convention plugins it can't see standalone). Configuring
-            // it in isolation always fails, so skip it without paying a full Gradle bootstrap.
+            // No settings.gradle(.kts) anywhere above the script: not standalone-buildable.
             unresolved++
             System.err.println(
                 "  ! skipped ${script.relativeTo(monorepoRoot).path}: no Gradle settings root (not standalone-buildable)",
+            )
+            continue
+        }
+        if (gradleInstallation == null && !File(projectDir, "gradle/wrapper/gradle-wrapper.properties").exists()) {
+            // Settings root exists but has no Gradle wrapper — Gradle will attempt to download a
+            // distribution, which always fails or is slow. Skip without bootstrapping.
+            unresolved++
+            System.err.println(
+                "  ! skipped ${script.relativeTo(monorepoRoot).path}: no Gradle wrapper in ${projectDir.relativeTo(monorepoRoot).path}",
             )
             continue
         }
