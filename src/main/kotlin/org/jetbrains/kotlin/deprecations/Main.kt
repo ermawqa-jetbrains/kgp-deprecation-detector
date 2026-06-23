@@ -29,8 +29,13 @@ fun main(args: Array<String>) {
         ?.let { loadAllowlist(File(it)) ?: return } ?: emptySet()
     val gradleInstallation = args.getOrNull(2)?.takeIf { it.isNotBlank() }?.let(::File)
 
-    val excludePatterns = System.getProperty("kgp.excludePatterns").orEmpty()
+    // Test-fixture build scripts (under testData/testResources/resources) are never real,
+    // standalone-buildable projects — they exist as inputs to other tests. Exclude them by
+    // default; -PexcludePatterns adds more path substrings on top.
+    val defaultExcludes = listOf("/testData/", "/testdata/", "/testResources/", "/resources/")
+    val userExcludes = System.getProperty("kgp.excludePatterns").orEmpty()
         .split(',').map { it.trim() }.filter { it.isNotBlank() }
+    val excludePatterns = (defaultExcludes + userExcludes).distinct()
 
     // Project build scripts only: settings/init scripts have a different receiver
     // (Settings/Gradle, not Project) and are not analysed.
@@ -61,6 +66,17 @@ fun main(args: Array<String>) {
     var unresolved = 0
     for (script in scripts) {
         val projectDir = findGradleRoot(script, monorepoRoot)
+        if (projectDir == null) {
+            // No settings.gradle(.kts) anywhere above the script: it is a subproject of a build
+            // whose settings are not checked in (e.g. a Bazel-driven composite, or a script that
+            // references project(":…") / convention plugins it can't see standalone). Configuring
+            // it in isolation always fails, so skip it without paying a full Gradle bootstrap.
+            unresolved++
+            System.err.println(
+                "  ! skipped ${script.relativeTo(monorepoRoot).path}: no Gradle settings root (not standalone-buildable)",
+            )
+            continue
+        }
         when (val model = GradleScriptModelProvider.fetch(projectDir, script, gradleInstallation)) {
             is ScriptModelResult.Resolved -> {
                 model.kgpVersion?.let(kgpVersions::add)
@@ -175,15 +191,15 @@ private fun runGroovyPass(monorepoRoot: File, excludePatterns: List<String> = em
     return findings
 }
 
-/** Nearest ancestor (up to [stopAt]) containing a settings script; else the script's own dir. */
-private fun findGradleRoot(script: File, stopAt: File): File {
+/** Nearest ancestor (up to [stopAt]) containing a settings script; null if there is none. */
+private fun findGradleRoot(script: File, stopAt: File): File? {
     var dir: File? = script.parentFile
     while (dir != null) {
         if (File(dir, "settings.gradle.kts").exists() || File(dir, "settings.gradle").exists()) return dir
         if (dir.canonicalFile == stopAt) break
         dir = dir.parentFile
     }
-    return script.parentFile
+    return null
 }
 
 /** Leading numeric components of a version ("2.4.0-dev-8644" -> [2,4,0]). */
