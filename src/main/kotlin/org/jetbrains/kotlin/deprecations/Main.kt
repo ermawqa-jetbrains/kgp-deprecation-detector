@@ -1,6 +1,9 @@
 package org.jetbrains.kotlin.deprecations
 
 import java.io.File
+import java.io.FileOutputStream
+import java.io.OutputStream
+import java.io.PrintStream
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
@@ -19,6 +22,17 @@ import kotlin.system.exitProcess
  * else 0.
  */
 fun main(args: Array<String>) {
+    // -PreportFile=<path> mirrors everything printed to stdout/stderr into a file too, so a run
+    // is a self-contained CI artifact. Terminal output is unaffected — this is additive.
+    System.getProperty("kgp.reportFile")?.takeIf { it.isNotBlank() }?.let { path ->
+        val reportFile = File(path)
+        reportFile.parentFile?.mkdirs()
+        val fileStream = FileOutputStream(reportFile)
+        System.setOut(PrintStream(TeeOutputStream(System.out, fileStream), true))
+        System.setErr(PrintStream(TeeOutputStream(System.err, fileStream), true))
+        Runtime.getRuntime().addShutdownHook(Thread { fileStream.flush(); fileStream.close() })
+    }
+
     if (args.isEmpty() || args[0].isBlank()) {
         printUsage()
         return
@@ -344,6 +358,24 @@ private fun sourceLineWithCaret(finding: Finding): List<String>? {
     return listOf(line, caret)
 }
 
+/** Writes every byte to both [a] and [b]; used to mirror console output into a report file. */
+private class TeeOutputStream(private val a: OutputStream, private val b: OutputStream) : OutputStream() {
+    override fun write(byte: Int) {
+        a.write(byte)
+        b.write(byte)
+    }
+
+    override fun write(buf: ByteArray, off: Int, len: Int) {
+        a.write(buf, off, len)
+        b.write(buf, off, len)
+    }
+
+    override fun flush() {
+        a.flush()
+        b.flush()
+    }
+}
+
 private fun printUsage() {
     System.err.println("Usage: kgp-deprecation-detector <monorepo-dir> [<allowlist-file>] [<gradle-installation-dir>]")
     System.err.println("  monorepo-dir            Root directory to scan for .gradle.kts files.")
@@ -353,4 +385,5 @@ private fun printUsage() {
     System.err.println("As a Gradle task:")
     System.err.println("  ./gradlew checkKgpDeprecations [-PmonorepoDir=<path>] [-Pallowlist=<path>] [-PkgpEngineVersion=<ver>]")
     System.err.println("    Groovy heuristic pass (separate, non-gating): [-PscanGroovy=false] [-PgroovyGating] [-PgroovyScanRoot=<path>]")
+    System.err.println("    Report file (mirrors terminal output): [-PreportFile=<path>]")
 }

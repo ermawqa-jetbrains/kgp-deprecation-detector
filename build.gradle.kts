@@ -82,6 +82,10 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     project.properties["groovyScanRoot"]?.toString()?.takeIf { it.isNotBlank() }
         ?.let { systemProperty("kgp.groovyScanRoot", it) }
 
+    // -PreportFile=<path> mirrors terminal output into a file, alongside the console.
+    project.properties["reportFile"]?.toString()?.takeIf { it.isNotBlank() }
+        ?.let { systemProperty("kgp.reportFile", it) }
+
     val monorepo = project.properties["monorepoDir"]?.toString()?.takeIf { it.isNotBlank() }
         ?: "test-monorepo"
     val allowlistArg = project.properties["allowlist"]?.toString().orEmpty()

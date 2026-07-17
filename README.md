@@ -41,7 +41,8 @@ For each `.gradle.kts`:
     [-PgradleInstallation=/path/to/gradle] \
     [-PkgpEngineVersion=2.4.20-dev-5677] \
     [-PexcludePatterns=/foo/,/bar/] \
-    [-PallowUnresolved]
+    [-PallowUnresolved] \
+    [-PreportFile=/path/to/report.txt]
 ```
 
 - **`monorepoDir`** — root to scan for `.gradle.kts` (default: `test-monorepo`).
@@ -57,6 +58,9 @@ For each `.gradle.kts`:
 - **`kgpEngineVersion`** — analysis compiler version (build-time, default `2.4.0`). **Must be
   ≥ the KGP version used in the scanned monorepo**, or KGP classes "compiled with a newer
   Kotlin" cannot be read. Dev versions resolve via the bundled JetBrains `kt/dev` repo.
+- **`reportFile`** — optional path; mirrors everything printed to stdout/stderr into that file
+  too, so a run is a self-contained CI artifact. Terminal output is unaffected — this is
+  additive, not a replacement.
 
 The run prints the **analysis engine version** and the **KGP version(s)** detected in the
 scanned scripts (parsed from each script's classpath), and warns if the engine is older
