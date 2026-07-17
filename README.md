@@ -110,6 +110,16 @@ Output groups findings by level (`ERROR` → `WARNING` → `HIDDEN`) with a care
   Gradle itself can't configure the build either).
 - Driving Gradle per project is the cost of correctness; results are cacheable by Gradle.
 
+## Performance
+
+Scripts are resolved and analysed in **parallel**, on a pool bounded to
+`min(available CPUs, 8)`. The cap protects Gradle daemon memory — each script's Tooling API
+connection can spin up its own daemon (~0.5-1 GB), so unbounded fan-out risks exhausting RAM
+before it helps wall-clock time. Results are identical to a serial run (each script's
+resolution + analysis is fully independent; findings/versions/unresolved-count are merged
+after all scripts complete, not mutated concurrently). The Groovy heuristic pass's file scan
+is parallelized the same way, since it's pure text matching against a read-only index.
+
 ## Groovy heuristic pass
 
 KGP deprecations also appear in **Groovy** scripts — IDE-injected Gradle init scripts hardcoded

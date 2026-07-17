@@ -1,6 +1,9 @@
 package org.jetbrains.kotlin.deprecations
 
 import java.io.File
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.system.exitProcess
 
 /**
@@ -64,49 +67,32 @@ fun main(args: Array<String>) {
     }
 
     val analyzer = KgpDeprecationAnalyzer()
-    val findings = mutableListOf<Finding>()
-    val kgpVersions = sortedSetOf<String>()
-    var unresolved = 0
-    for (script in scripts) {
-        val projectDir = findGradleRoot(script, monorepoRoot)
-        if (projectDir == null) {
-            // No settings.gradle(.kts) anywhere above the script: not standalone-buildable.
-            unresolved++
-            System.err.println(
-                "  ! skipped ${script.relativeTo(monorepoRoot).path}: no Gradle settings root (not standalone-buildable)",
+
+    // Each script is resolved independently (own Tooling API connection, own scripting-host
+    // compile), so the whole loop is embarrassingly parallel. Bounded to protect Gradle daemon
+    // memory — each Tooling API connection can spin up its own daemon (~0.5-1 GB).
+    val parallelism = minOf(Runtime.getRuntime().availableProcessors(), 8).coerceAtLeast(1)
+    val pool = Executors.newFixedThreadPool(parallelism)
+    val done = AtomicInteger()
+    val outcomes = try {
+        scripts.map { script ->
+            pool.submit(
+                Callable {
+                    resolveOne(script, monorepoRoot, gradleInstallation, analyzer).also {
+                        logProgress(done.incrementAndGet(), scripts.size)
+                    }
+                },
             )
-            continue
-        }
-        if (gradleInstallation == null && !File(projectDir, "gradle/wrapper/gradle-wrapper.properties").exists()) {
-            // Settings root exists but has no Gradle wrapper — Gradle will attempt to download a
-            // distribution, which always fails or is slow. Skip without bootstrapping.
-            unresolved++
-            System.err.println(
-                "  ! skipped ${script.relativeTo(monorepoRoot).path}: no Gradle wrapper in ${projectDir.relativeTo(monorepoRoot).path}",
-            )
-            continue
-        }
-        when (val model = GradleScriptModelProvider.fetch(projectDir, script, gradleInstallation)) {
-            is ScriptModelResult.Resolved -> {
-                model.kgpVersion?.let(kgpVersions::add)
-                try {
-                    findings += analyzer.analyze(script, model.classPath, model.implicitImports)
-                } catch (e: Exception) {
-                    unresolved++
-                    System.err.println(
-                        "  ! could not analyse ${script.relativeTo(monorepoRoot).path}: ${e.message?.lineSequence()?.first()}",
-                    )
-                }
-            }
-            is ScriptModelResult.Failed -> {
-                unresolved++
-                System.err.println(
-                    "  ! could not resolve ${script.relativeTo(monorepoRoot).path}: " +
-                        model.message.lineSequence().first(),
-                )
-            }
-        }
+        }.map { it.get() }
+    } finally {
+        pool.shutdown()
     }
+    if (scripts.isNotEmpty()) System.err.println()
+
+    val findings = outcomes.flatMap { it.findings }.toMutableList()
+    val kgpVersions = outcomes.mapNotNull { it.kgpVersion }.toSortedSet()
+    val unresolved = outcomes.count { it.unresolved }
+    outcomes.mapNotNull { it.warning }.forEach(System.err::println)
 
     println("KGP version(s) in scanned scripts: ${if (kgpVersions.isEmpty()) "(none detected)" else kgpVersions.joinToString(", ")}")
     if (engineVersion != null && kgpVersions.any { versionLessThan(engineVersion, it) }) {
@@ -165,6 +151,79 @@ fun main(args: Array<String>) {
     }
 }
 
+/** Outcome of resolving+analysing one script — carries no shared state, safe to merge later. */
+private data class ScriptOutcome(
+    val findings: List<Finding>,
+    val kgpVersion: String?,
+    val unresolved: Boolean,
+    val warning: String?,
+)
+
+/**
+ * Resolves and analyses a single script. Pure with respect to caller state — everything needed
+ * is passed in, everything produced comes back in the returned [ScriptOutcome]. `analyzer` is
+ * shared across concurrent calls: it holds no mutable instance state, building a fresh
+ * compiler/host/classloader per [KgpDeprecationAnalyzer.analyze] call.
+ */
+private fun resolveOne(
+    script: File,
+    monorepoRoot: File,
+    gradleInstallation: File?,
+    analyzer: KgpDeprecationAnalyzer,
+): ScriptOutcome {
+    val projectDir = findGradleRoot(script, monorepoRoot)
+    if (projectDir == null) {
+        // No settings.gradle(.kts) anywhere above the script: not standalone-buildable.
+        return ScriptOutcome(
+            findings = emptyList(),
+            kgpVersion = null,
+            unresolved = true,
+            warning = "  ! skipped ${script.relativeTo(monorepoRoot).path}: no Gradle settings root (not standalone-buildable)",
+        )
+    }
+    if (gradleInstallation == null && !File(projectDir, "gradle/wrapper/gradle-wrapper.properties").exists()) {
+        // Settings root exists but has no Gradle wrapper — Gradle will attempt to download a
+        // distribution, which always fails or is slow. Skip without bootstrapping.
+        return ScriptOutcome(
+            findings = emptyList(),
+            kgpVersion = null,
+            unresolved = true,
+            warning = "  ! skipped ${script.relativeTo(monorepoRoot).path}: no Gradle wrapper in ${projectDir.relativeTo(monorepoRoot).path}",
+        )
+    }
+    return when (val model = GradleScriptModelProvider.fetch(projectDir, script, gradleInstallation)) {
+        is ScriptModelResult.Resolved -> {
+            try {
+                ScriptOutcome(
+                    findings = analyzer.analyze(script, model.classPath, model.implicitImports),
+                    kgpVersion = model.kgpVersion,
+                    unresolved = false,
+                    warning = null,
+                )
+            } catch (e: Exception) {
+                ScriptOutcome(
+                    findings = emptyList(),
+                    kgpVersion = model.kgpVersion,
+                    unresolved = true,
+                    warning = "  ! could not analyse ${script.relativeTo(monorepoRoot).path}: ${e.message?.lineSequence()?.first()}",
+                )
+            }
+        }
+        is ScriptModelResult.Failed -> ScriptOutcome(
+            findings = emptyList(),
+            kgpVersion = null,
+            unresolved = true,
+            warning = "  ! could not resolve ${script.relativeTo(monorepoRoot).path}: " +
+                model.message.lineSequence().first(),
+        )
+    }
+}
+
+/** Thread-safe single-line progress indicator; overwrites itself via carriage return. */
+private fun logProgress(done: Int, total: Int) {
+    System.err.print("\r  resolving $done/$total …")
+}
+
 /**
  * Name-matches deprecated KGP APIs in Groovy scripts: standalone `.gradle` files and Groovy
  * scripts embedded as string literals in `.kt`/`.java`. The deprecated-name index is built once
@@ -184,19 +243,19 @@ private fun runGroovyPass(monorepoRoot: File, excludePatterns: List<String> = em
     }
     val scanRoot = System.getProperty("kgp.groovyScanRoot")?.takeIf { it.isNotBlank() }?.let(::File) ?: monorepoRoot
     val scanner = GroovyDeprecationScanner(index)
-    val findings = mutableListOf<Finding>()
-    var scanned = 0
-    for (file in GroovySourceFinder.candidates(scanRoot, excludePatterns)) {
-        scanned++
+    // Scanning is pure text matching over a read-only, pre-built index — safe to parallelize.
+    val candidates = GroovySourceFinder.candidates(scanRoot, excludePatterns).toList()
+    val findings = candidates.parallelStream().map { file ->
         when (file.extension) {
             "gradle" -> runCatching { scanner.scanText(file.readText(), file.path, 1, 1) }
-                .getOrDefault(emptyList()).let(findings::addAll)
-            "kt", "java" -> EmbeddedGroovyScriptExtractor.extract(file).forEach { s ->
-                findings += scanner.scanText(s.text, file.path, s.startLine, s.startColumn)
+                .getOrDefault(emptyList())
+            "kt", "java" -> EmbeddedGroovyScriptExtractor.extract(file).flatMap { s ->
+                scanner.scanText(s.text, file.path, s.startLine, s.startColumn)
             }
+            else -> emptyList()
         }
-    }
-    println("Groovy heuristic pass: ${index.size} deprecated name(s), $scanned candidate file(s) scanned.")
+    }.toList().flatten()
+    println("Groovy heuristic pass: ${index.size} deprecated name(s), ${candidates.size} candidate file(s) scanned.")
     return findings
 }
 
