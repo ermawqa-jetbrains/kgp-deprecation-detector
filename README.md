@@ -42,7 +42,8 @@ For each `.gradle.kts`:
     [-PkgpEngineVersion=2.4.20-dev-5677] \
     [-PexcludePatterns=/foo/,/bar/] \
     [-PallowUnresolved] \
-    [-PreportFile=/path/to/report.txt]
+    [-PreportFile=/path/to/report.txt] \
+    [-PfetchTimeout=300]
 ```
 
 - **`monorepoDir`** — root to scan for `.gradle.kts` (default: `test-monorepo`).
@@ -62,6 +63,10 @@ For each `.gradle.kts`:
   self-contained CI artifact. **On by default**, written to `build/reports/kgp-deprecations.txt`;
   override the path with `-PreportFile=<path>`. Terminal output is unaffected — this is
   additive, not a replacement.
+- **`fetchTimeout`** — per-script Gradle-model fetch timeout in seconds (default `300`; `0`
+  disables). A hung or very slow project configuration is cancelled at the timeout and reported
+  as `UNRESOLVED`, so one stuck script can't stall the whole run. The Tooling API's own
+  `.get()` has no timeout, so this bound is what guarantees the run terminates.
 
 The run prints the **analysis engine version** and the **KGP version(s)** detected in the
 scanned scripts (parsed from each script's classpath), and warns if the engine is older

@@ -22,8 +22,8 @@ import kotlin.script.experimental.jvmhost.JvmScriptCompiler
  * Resolves a single `.gradle.kts` against a Gradle-provided classpath and reports
  * deprecated-API usages as the compiler's own DEPRECATION diagnostics.
  *
- * The script is compiled the way Gradle compiles it — an implicit `Project` receiver
- * plus the same compiler plugins Gradle applies (sam-with-receiver and assignment) —
+ * The script is compiled the way Gradle compiles it - an implicit `Project` receiver
+ * plus the same compiler plugins Gradle applies (sam-with-receiver and assignment) -
  * so implicit accessor chains like `kotlin { jvm { withJava() } }` and lazy-property
  * assignments like `jvmTarget = JvmTarget.JVM_11` bind to their real declarations.
  * Every reported finding is therefore compiler-verified: there are no false positives

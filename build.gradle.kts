@@ -88,6 +88,11 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
         ?: layout.buildDirectory.file("reports/kgp-deprecations.txt").get().asFile.path
     systemProperty("kgp.reportFile", reportFile)
 
+    // -PfetchTimeout=<seconds> bounds each per-script Gradle model fetch (default 300; 0 disables)
+    // so a hung project configuration can't stall the whole run.
+    project.properties["fetchTimeout"]?.toString()?.takeIf { it.isNotBlank() }
+        ?.let { systemProperty("kgp.fetchTimeoutSeconds", it) }
+
     val monorepo = project.properties["monorepoDir"]?.toString()?.takeIf { it.isNotBlank() }
         ?: "test-monorepo"
     val allowlistArg = project.properties["allowlist"]?.toString().orEmpty()

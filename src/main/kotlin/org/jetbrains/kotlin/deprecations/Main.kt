@@ -22,9 +22,9 @@ import kotlin.system.exitProcess
  * else 0.
  */
 fun main(args: Array<String>) {
-    // Mirrors everything printed to stdout/stderr into a file too, so a run is a self-contained
-    // CI artifact. On by default (see build.gradle.kts default path); override with
-    // -PreportFile=<path>, or pass an empty value to disable. Terminal output is unaffected.
+    // mirrors everything printed to stdout/stderr into build/reports/kgp-deprecations.txt
+    // enabled by default (see build.gradle.kts default path); override with
+    // -PreportFile=<path>, or pass an empty value to disable
     val reportFilePath = System.getProperty("kgp.reportFile")?.takeIf { it.isNotBlank() }
     reportFilePath?.let { path ->
         val reportFile = File(path)
@@ -35,8 +35,9 @@ fun main(args: Array<String>) {
         Runtime.getRuntime().addShutdownHook(Thread { fileStream.flush(); fileStream.close() })
     }
 
+    // extract args
     if (args.isEmpty() || args[0].isBlank()) {
-        printUsage()
+        printHelpUsage()
         return
     }
     val monorepoRoot = File(args[0]).canonicalFile
@@ -48,9 +49,8 @@ fun main(args: Array<String>) {
         ?.let { loadAllowlist(File(it)) ?: return } ?: emptySet()
     val gradleInstallation = args.getOrNull(2)?.takeIf { it.isNotBlank() }?.let(::File)
 
-    // Test-fixture build scripts (under test/resource directories) are never real,
-    // standalone-buildable projects — they exist as inputs to other tests. Exclude them by
-    // default; -PexcludePatterns adds more path substrings on top.
+    // exclude test fixtures
+    // -PexcludePatterns adds more path substrings on top
     val defaultExcludes = listOf(
         "/testData/", "/testdata/", "/testResources/", "/testSources/", "/testSrc/",
         "/tests/", "/integration-tests/", "/agpIntegrationTestSrc/", "/resources/",
@@ -59,8 +59,8 @@ fun main(args: Array<String>) {
         .split(',').map { it.trim() }.filter { it.isNotBlank() }
     val excludePatterns = (defaultExcludes + userExcludes).distinct()
 
-    // Project build scripts only: settings/init scripts have a different receiver
-    // (Settings/Gradle, not Project) and are not analysed.
+    // project build scripts only: settings/init scripts have a different receiver
+    // (Settings/Gradle, not Project) and are not analysed
     val scripts = monorepoRoot.walkTopDown()
         .filter {
             it.isFile && it.name.endsWith(".gradle.kts") &&
@@ -85,26 +85,33 @@ fun main(args: Array<String>) {
 
     val analyzer = KgpDeprecationAnalyzer()
 
-    // Each script is resolved independently (own Tooling API connection, own scripting-host
-    // compile), so the whole loop is embarrassingly parallel. Bounded to protect Gradle daemon
-    // memory — each Tooling API connection can spin up its own daemon (~0.5-1 GB).
-    val parallelism = minOf(Runtime.getRuntime().availableProcessors(), 8).coerceAtLeast(1)
+    // Per-script Gradle-model fetch timeout (seconds). A hung/very slow project configuration
+    // would otherwise block a worker thread forever (the Tooling API .get() has no timeout of its
+    // own), so the run never finishes. On timeout the fetch is cancelled and the script is marked
+    // UNRESOLVED. Override with -PfetchTimeout=<seconds>; 0 disables.
+    val fetchTimeoutSeconds = System.getProperty("kgp.fetchTimeoutSeconds")?.toLongOrNull() ?: 300L
+
+    // each script is resolved independently (own Tooling API connection, own scripting-host compile)
+    // so the whole loop is embarrassingly parallel. Bounded to protect Gradle daemon
+    // memory - each Tooling API connection can spin up its own daemon (~0.5-1 GB)
+    val parallelism = minOf(Runtime.getRuntime().availableProcessors(), 12).coerceAtLeast(1)
     val pool = Executors.newFixedThreadPool(parallelism)
-    val done = AtomicInteger()
+    val started = AtomicInteger()
     val outcomes = try {
         scripts.map { script ->
             pool.submit(
                 Callable {
-                    resolveOne(script, monorepoRoot, gradleInstallation, analyzer).also {
-                        logProgress(done.incrementAndGet(), scripts.size)
-                    }
+                    // Log at start (not completion) so the currently-in-flight scripts are visible
+                    // — the last lines before a stall name whatever is slow to resolve.
+                    val n = started.incrementAndGet()
+                    System.err.println("  [$n/${scripts.size}] resolving ${script.relativeTo(monorepoRoot).path}")
+                    resolveOne(script, monorepoRoot, gradleInstallation, analyzer, fetchTimeoutSeconds)
                 },
             )
         }.map { it.get() }
     } finally {
         pool.shutdown()
     }
-    if (scripts.isNotEmpty()) System.err.println()
 
     val findings = outcomes.flatMap { it.findings }.toMutableList()
     val kgpVersions = outcomes.mapNotNull { it.kgpVersion }.toSortedSet()
@@ -120,8 +127,8 @@ fun main(args: Array<String>) {
     }
     println()
 
-    // Groovy heuristic pass (separate, non-gating by default). On by default; -PscanGroovy=false
-    // turns it off. Groovy is dynamically typed and cannot be resolved, so this is name-matching.
+    // Groovy heuristic pass (separate feature). Enabled by default;
+    // -PscanGroovy=false turns it off.
     val groovyFindings =
         if (System.getProperty("kgp.scanGroovy", "true") == "true") runGroovyPass(monorepoRoot, excludePatterns)
         else emptyList()
@@ -139,9 +146,7 @@ fun main(args: Array<String>) {
         println("UNRESOLVED: $unresolved script(s) could not be modelled (see warnings above).")
     }
 
-    // Exit policy. The resolved pass owns the gate: ERROR-level deprecation -> 1; an unanalysable
-    // script is not a silent pass -> 2 (unless -PallowUnresolved). Groovy heuristic findings are
-    // NON-gating by default; -PgroovyGating makes a heuristic ERROR also fail (after resolved checks).
+    // exit codes
     val allowUnresolved = System.getProperty("kgp.allowUnresolved") == "true"
     val groovyGating = System.getProperty("kgp.groovyGating") == "true"
     val groovyNote = if (heuristic.isNotEmpty()) " — ${heuristic.size} Groovy heuristic finding(s) noted" else ""
@@ -168,7 +173,7 @@ fun main(args: Array<String>) {
     }
 }
 
-/** Outcome of resolving+analysing one script — carries no shared state, safe to merge later. */
+/** Outcome of resolving+analysing one script */
 private data class ScriptOutcome(
     val findings: List<Finding>,
     val kgpVersion: String?,
@@ -177,7 +182,7 @@ private data class ScriptOutcome(
 )
 
 /**
- * Resolves and analyses a single script. Pure with respect to caller state — everything needed
+ * Resolves & analyses a single script. Pure with respect to caller state - everything needed
  * is passed in, everything produced comes back in the returned [ScriptOutcome]. `analyzer` is
  * shared across concurrent calls: it holds no mutable instance state, building a fresh
  * compiler/host/classloader per [KgpDeprecationAnalyzer.analyze] call.
@@ -187,19 +192,18 @@ private fun resolveOne(
     monorepoRoot: File,
     gradleInstallation: File?,
     analyzer: KgpDeprecationAnalyzer,
+    fetchTimeoutSeconds: Long,
 ): ScriptOutcome {
     val projectDir = findGradleRoot(script, monorepoRoot)
-    if (projectDir == null) {
-        // No settings.gradle(.kts) anywhere above the script: not standalone-buildable.
+        ?: // no settings.gradle(.kts) -> not standalone-buildable.
         return ScriptOutcome(
             findings = emptyList(),
             kgpVersion = null,
             unresolved = true,
             warning = "  ! skipped ${script.relativeTo(monorepoRoot).path}: no Gradle settings root (not standalone-buildable)",
         )
-    }
     if (gradleInstallation == null && !File(projectDir, "gradle/wrapper/gradle-wrapper.properties").exists()) {
-        // Settings root exists but has no Gradle wrapper — Gradle will attempt to download a
+        // Settings root exists but has no Gradle wrapper - Gradle will attempt to download a
         // distribution, which always fails or is slow. Skip without bootstrapping.
         return ScriptOutcome(
             findings = emptyList(),
@@ -208,7 +212,7 @@ private fun resolveOne(
             warning = "  ! skipped ${script.relativeTo(monorepoRoot).path}: no Gradle wrapper in ${projectDir.relativeTo(monorepoRoot).path}",
         )
     }
-    return when (val model = GradleScriptModelProvider.fetch(projectDir, script, gradleInstallation)) {
+    return when (val model = GradleScriptModelProvider.fetch(projectDir, script, gradleInstallation, fetchTimeoutSeconds)) {
         is ScriptModelResult.Resolved -> {
             try {
                 ScriptOutcome(
@@ -234,11 +238,6 @@ private fun resolveOne(
                 model.message.lineSequence().first(),
         )
     }
-}
-
-/** Thread-safe single-line progress indicator; overwrites itself via carriage return. */
-private fun logProgress(done: Int, total: Int) {
-    System.err.print("\r  resolving $done/$total …")
 }
 
 /**
@@ -320,13 +319,13 @@ private fun report(findings: List<Finding>, monorepoRoot: File) {
     if (resolved.isEmpty()) {
         println("No deprecated API usages found in resolved scripts.")
     } else {
-        printSection("Resolved (.gradle.kts) — compiler-verified", resolved, monorepoRoot)
+        printSection("Resolved (.gradle.kts) - compiler-verified", resolved, monorepoRoot)
     }
 
     if (heuristic.isNotEmpty()) {
         println()
         printSection(
-            "HEURISTIC — Groovy scripts (name-match only, review required; not gating)",
+            "Groovy scripts (name-match only, review required)",
             heuristic, monorepoRoot,
         )
     }
@@ -355,13 +354,14 @@ private fun printSection(title: String, findings: List<Finding>, monorepoRoot: F
     println("------------------------------------------------------------")
 }
 
+// arrow under deprecated API
 private fun sourceLineWithCaret(finding: Finding): List<String>? {
     val line = runCatching { File(finding.file).readLines().getOrNull(finding.line - 1) }.getOrNull() ?: return null
     val caret = " ".repeat((finding.column - 1).coerceAtLeast(0)) + "^"
     return listOf(line, caret)
 }
 
-/** Writes every byte to both [a] and [b]; used to mirror console output into a report file. */
+/** Writes every byte to both [a] and [b]; used to mirror console output into a report file */
 private class TeeOutputStream(private val a: OutputStream, private val b: OutputStream) : OutputStream() {
     override fun write(byte: Int) {
         a.write(byte)
@@ -379,7 +379,7 @@ private class TeeOutputStream(private val a: OutputStream, private val b: Output
     }
 }
 
-private fun printUsage() {
+private fun printHelpUsage() {
     System.err.println("Usage: kgp-deprecation-detector <monorepo-dir> [<allowlist-file>] [<gradle-installation-dir>]")
     System.err.println("  monorepo-dir            Root directory to scan for .gradle.kts files.")
     System.err.println("  allowlist-file          Optional. One deprecated-symbol signature per line; '#' starts a comment.")
