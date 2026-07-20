@@ -82,9 +82,11 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     project.properties["groovyScanRoot"]?.toString()?.takeIf { it.isNotBlank() }
         ?.let { systemProperty("kgp.groovyScanRoot", it) }
 
-    // -PreportFile=<path> mirrors terminal output into a file, alongside the console.
-    project.properties["reportFile"]?.toString()?.takeIf { it.isNotBlank() }
-        ?.let { systemProperty("kgp.reportFile", it) }
+    // Mirrors terminal output into a file, alongside the console — on by default so every run
+    // leaves a CI-artifact-friendly report; override the path with -PreportFile=<path>.
+    val reportFile = project.properties["reportFile"]?.toString()?.takeIf { it.isNotBlank() }
+        ?: layout.buildDirectory.file("reports/kgp-deprecations.txt").get().asFile.path
+    systemProperty("kgp.reportFile", reportFile)
 
     val monorepo = project.properties["monorepoDir"]?.toString()?.takeIf { it.isNotBlank() }
         ?: "test-monorepo"

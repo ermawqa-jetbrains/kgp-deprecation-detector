@@ -58,8 +58,9 @@ For each `.gradle.kts`:
 - **`kgpEngineVersion`** — analysis compiler version (build-time, default `2.4.0`). **Must be
   ≥ the KGP version used in the scanned monorepo**, or KGP classes "compiled with a newer
   Kotlin" cannot be read. Dev versions resolve via the bundled JetBrains `kt/dev` repo.
-- **`reportFile`** — optional path; mirrors everything printed to stdout/stderr into that file
-  too, so a run is a self-contained CI artifact. Terminal output is unaffected — this is
+- **`reportFile`** — mirrors everything printed to stdout/stderr into a file too, so a run is a
+  self-contained CI artifact. **On by default**, written to `build/reports/kgp-deprecations.txt`;
+  override the path with `-PreportFile=<path>`. Terminal output is unaffected — this is
   additive, not a replacement.
 
 The run prints the **analysis engine version** and the **KGP version(s)** detected in the

@@ -22,9 +22,11 @@ import kotlin.system.exitProcess
  * else 0.
  */
 fun main(args: Array<String>) {
-    // -PreportFile=<path> mirrors everything printed to stdout/stderr into a file too, so a run
-    // is a self-contained CI artifact. Terminal output is unaffected — this is additive.
-    System.getProperty("kgp.reportFile")?.takeIf { it.isNotBlank() }?.let { path ->
+    // Mirrors everything printed to stdout/stderr into a file too, so a run is a self-contained
+    // CI artifact. On by default (see build.gradle.kts default path); override with
+    // -PreportFile=<path>, or pass an empty value to disable. Terminal output is unaffected.
+    val reportFilePath = System.getProperty("kgp.reportFile")?.takeIf { it.isNotBlank() }
+    reportFilePath?.let { path ->
         val reportFile = File(path)
         reportFile.parentFile?.mkdirs()
         val fileStream = FileOutputStream(reportFile)
@@ -74,6 +76,7 @@ fun main(args: Array<String>) {
     if (engineVersion != null) println("  Engine   : Kotlin $engineVersion (analysis compiler)")
     println("  Allowlist: ${if (allowlist.isEmpty()) "(none)" else "${allowlist.size} entries"}")
     if (excludePatterns.isNotEmpty()) println("  Excluded : ${excludePatterns.joinToString(", ")}")
+    if (reportFilePath != null) println("  Report   : $reportFilePath")
     println()
 
     if (scripts.isEmpty()) {
