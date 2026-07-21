@@ -9,10 +9,9 @@ import org.objectweb.asm.Opcodes
 import java.util.jar.JarFile
 
 /**
- * Reads every `@Deprecated` (Kotlin) declaration out of a KGP jar via ASM — without
- * loading the classes. Produces the deprecated-API index the Groovy heuristic pass
- * matches against by name. Used only for Groovy scripts, which cannot be resolved by a
- * frontend; the `.gradle.kts` resolution pass does not use this.
+ * Reads every `@Deprecated` (Kotlin) declaration out of a KGP jar via ASM - without
+ * loading the classes. Produces the deprecated-API index that [EmbeddedScriptScanner] matches
+ * against by name, for embedded Gradle scripts that are never compiled.
  */
 object KgpDeprecationExtractor {
 

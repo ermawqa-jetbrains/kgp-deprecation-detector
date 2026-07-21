@@ -1,28 +1,15 @@
 package org.jetbrains.kotlin.deprecations
 
-/** Severity of a deprecation, mapped from the compiler diagnostic severity. */
+/** Severity of a deprecation, read from the `@Deprecated` annotation's `level`. */
 enum class DeprecationLevel { WARNING, ERROR, HIDDEN }
 
 /**
- * Which pass produced a [Finding].
- *
- * [RESOLVED] — compiler-verified from a fully-resolved `.gradle.kts` (zero false
- * positives; owns the CI gate). [HEURISTIC] — a name match inside a Groovy script
- * (embedded in `.kt`/`.java`, or a standalone `.gradle`), where dynamic typing makes
- * resolution impossible. Heuristic findings are reported separately and never gate CI
- * by default. The two are never mixed.
- */
-enum class FindingSource { RESOLVED, HEURISTIC }
-
-/**
- * A usage of a deprecated API in a Gradle build script.
- *
- * For [FindingSource.RESOLVED] this comes from a compiler DEPRECATION diagnostic on the
- * fully-resolved script, so [line]/[column] are exact and a same-named symbol on a
- * non-deprecated receiver is never reported; [symbol] is the rendered signature (e.g.
- * `fun withJava(): Unit`). For [FindingSource.HEURISTIC] it is a whole-word name match;
- * [symbol] is the deprecated declaration's qualified name. [symbol] is used for grouping
- * and allowlisting; [message] is the deprecation text.
+ * A name match of a deprecated KGP API inside an embedded Gradle script (a Groovy or Kotlin-DSL
+ * script literal hardcoded as a string inside `.kt`/`.java`). Since the embedded script is never
+ * compiled — and Groovy can't be resolved by any frontend regardless — this is whole-word name
+ * matching, not compiler resolution: [symbol] is the deprecated declaration's qualified name,
+ * used for grouping and allowlisting; [message] is the deprecation text; [line]/[column] point
+ * into the host `.kt`/`.java` file.
  */
 data class Finding(
     val file: String,
@@ -31,5 +18,4 @@ data class Finding(
     val symbol: String,
     val level: DeprecationLevel,
     val message: String,
-    val source: FindingSource = FindingSource.RESOLVED,
 )

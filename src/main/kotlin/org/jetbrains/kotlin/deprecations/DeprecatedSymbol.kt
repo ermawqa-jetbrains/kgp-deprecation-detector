@@ -3,9 +3,8 @@ package org.jetbrains.kotlin.deprecations
 /**
  * A `@Deprecated` declaration read out of a KGP jar by [KgpDeprecationExtractor].
  *
- * This is the deprecated-API *index* the Groovy heuristic pass matches against — it
- * does not represent a usage (that is [Finding]). [DeprecationLevel] is shared with the
- * resolution pass (declared in `Finding.kt`).
+ * This is the deprecated-API *index* [EmbeddedScriptScanner] matches against - it does
+ * not represent a usage (that is [Finding]). [DeprecationLevel] is declared in `Finding.kt`.
  */
 data class DeprecatedSymbol(
     val className: String,
