@@ -1,0 +1,48 @@
+# Allowlist for real IntelliJ monorepo runs (-Pallowlist=test-monorepo/allowlist-intellij.txt).
+# These are false positives (I hope) from name-matching against generic member names -
+# the deprecated symbol's member name collides with a common Groovy/Gradle/Kotlin keyword
+# or lambda variable name, not an actual call to the deprecated API.
+
+# "create" collides with the generic TaskContainer.create(...) call
+org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreApplicationEnvironment$Companion.create
+org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsExec$Companion.create
+org.jetbrains.kotlin.gradle.targets.wasm.binaryen.BinaryenExec$Companion.create
+org.jetbrains.kotlin.gradle.targets.wasm.d8.D8Exec$Companion.create
+
+# "getVersion" collides with generic .version property/GradleVersion.version(...) calls
+org.jetbrains.kotlin.gradle.targets.web.nodejs.BaseNodeJsRootExtension.getVersion
+
+# "getProject" collides with the lambda parameter name `project`
+org.jetbrains.kotlin.gradle.plugin.mpp.external.ExternalKotlinTargetApiExtensionsKt.getProject
+
+# "merge" collides with plain English inside a doc/error-message string
+kotlinx.coroutines.flow.FlowKt.merge
+kotlinx.coroutines.flow.FlowKt__MigrationKt.merge
+
+# "compose" collides with the unrelated Compose Gradle plugin DSL (compose.desktop.application {})
+kotlinx.coroutines.flow.FlowKt.compose
+kotlinx.coroutines.flow.FlowKt__MigrationKt.compose
+
+# "getTarget" collides with the lambda variable name `target`
+org.jetbrains.kotlin.gradle.dsl.KotlinJsOptions$DefaultImpls.getTarget
+org.jetbrains.kotlin.gradle.dsl.KotlinJsProjectExtension.getTarget
+
+# "getCompilation" collides with the lambda variable name `compilation`
+org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink.getCompilation
+
+# "getMain" collides with a generic `main = ...` variable assignment
+org.jetbrains.kotlin.gradle.dsl.KotlinJsOptions$DefaultImpls.getMain
+
+# "catch" collides with ordinary try/catch blocks
+kotlinx.coroutines.flow.LintKt.catch
+
+# "dependencies" collides with the plain top-level Gradle dependencies {} block
+org.jetbrains.kotlin.gradle.plugin.KotlinCompilation.dependencies
+org.jetbrains.kotlin.gradle.plugin.mpp.DecoratedKotlinCompilation.dependencies
+org.jetbrains.kotlin.gradle.plugin.mpp.compilationImpl.KotlinCompilationImpl.dependencies
+
+# "getCurrent" collides with GradleVersion.current()
+org.jetbrains.kotlin.konan.target.Xcode$Companion.getCurrent
+
+# "getStatic" collides with the Java `static` keyword modifier
+org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig$DevServer.getStatic
