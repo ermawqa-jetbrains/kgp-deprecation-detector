@@ -14,15 +14,6 @@ import kotlin.system.exitProcess
  *  - **Reflective calls** - a member name passed as a string literal to a `callReflective*`
  *    helper (cross-KGP-version compat dispatch), resolved only at runtime.
  *
- * Real `.gradle.kts` files are already resolved in-editor by IntelliJ, so their deprecation
- * warnings are already visible - out of scope here. Both cases above are not: a hardcoded script
- * is never compiled (Groovy can't be resolved by any frontend anyway), and a reflective call's
- * target name is never seen by the compiler as a call to that member. This tool restores that
- * missing signal by name-matching.
- *
- * Usage: `<scan-root> [<allowlist-file>]`
- *  - allowlist-file: one deprecated-symbol qualified name per line; `#` starts a comment.
- *
  * Exit 1 if any `ERROR`- or `HIDDEN`-level match is found, else 0.
  */
 fun main(args: Array<String>) {

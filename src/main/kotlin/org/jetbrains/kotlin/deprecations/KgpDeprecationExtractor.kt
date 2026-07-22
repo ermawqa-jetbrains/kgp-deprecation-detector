@@ -120,9 +120,7 @@ private class DeprecationAnnotationVisitor(
     override fun visitEnd() = onComplete(level, message, replaceWith)
 }
 
-// Classes that are never used directly in Gradle build files.
-// Segment-based matching avoids the `contains("/internal/")` quirk that
-// silently lets `foo/internal/X.class` (no trailing slash) through.
+// сlasses that are never used directly in Gradle build files.
 private fun String.isExcluded(): Boolean {
     val segments = substringBeforeLast('/').split('/')
     val simpleName = substringAfterLast('/').removeSuffix(".class")

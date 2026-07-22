@@ -2,10 +2,7 @@ package org.jetbrains.kotlin.deprecations
 
 /**
  * Matches reflective-call target names (from [ReflectiveCallArgExtractor]) against the
- * deprecated-API index by exact JVM member name. The name is already an isolated identifier —
- * exactly the raw `memberName` [KgpDeprecationExtractor] recorded — so an exact-match lookup is
- * enough; no whole-word regex or comment/string masking is needed the way [EmbeddedScriptScanner]
- * needs it for a block of embedded-script text.
+ * deprecated-API index by exact JVM member name
  */
 class ReflectiveCallArgScanner(index: List<DeprecatedSymbol>) {
 

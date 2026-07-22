@@ -4,11 +4,9 @@ import java.io.File
 import java.io.IOException
 
 /**
- * Finds `.kt`/`.java` files that call a `callReflective*` helper — the reflective-dispatch
+ * Finds `.kt`/`.java` files that call a `callReflective*` helper - the reflective-dispatch
  * convention used for cross-KGP-version compatibility (e.g.
- * `callReflectiveGetter("getCompilation", logger)`). Same `rg` fast-path / walk fallback as
- * [EmbeddedScriptFinder]; a distinct finder because the marker (a fixed identifier prefix) and
- * candidate population are unrelated to embedded-script detection.
+ * `callReflectiveGetter("getCompilation", logger)`).
  */
 object ReflectiveCallFinder {
 

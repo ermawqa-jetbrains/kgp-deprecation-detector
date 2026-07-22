@@ -1,9 +1,5 @@
-// Fixture for the detector (NOT compiled — read as text by the tool).
-//
-// Mimics the IntelliJ pattern: a Gradle init script hardcoded as a Groovy string literal
-// inside a .kt file. It uses the WARNING-deprecated KGP `withJava()` in Groovy code, which
-// is dynamically typed and so cannot be resolved by any frontend — only name-matching
-// catches it. Being WARNING-only, it must NOT fail the run (only ERROR/HIDDEN gate exit 1).
+// Gradle init script hardcoded as a Groovy string literal
+// inside a .kt file. It uses the WARNING-deprecated KGP `withJava()` in Groovy code
 package embedded
 
 val initScript = """
