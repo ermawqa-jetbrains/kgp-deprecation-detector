@@ -88,7 +88,7 @@ fun main(args: Array<String>) {
 
     println("Scanned ${candidates.size} embedded-script candidate file(s), ${reflectiveCandidates.size} reflective-call candidate file(s).")
     println()
-    report(findings, scanRoot)
+    report(findings)
 
     val errors = findings.count { it.level == DeprecationLevel.ERROR }
     val hidden = findings.count { it.level == DeprecationLevel.HIDDEN }
@@ -131,7 +131,7 @@ private fun loadAllowlist(file: File): Set<String>? {
         .toSet()
 }
 
-private fun report(findings: List<Finding>, scanRoot: File) {
+private fun report(findings: List<Finding>) {
     if (findings.isEmpty()) {
         println("No deprecated API usages found in embedded scripts.")
         return
@@ -153,8 +153,9 @@ private fun report(findings: List<Finding>, scanRoot: File) {
             println("  Reason: ${usages.first().message}")
             println("  Hits  : ${usages.size}")
             usages.forEach { f ->
-                val rel = File(f.file).relativeToOrSelf(scanRoot).path
-                println("    $rel:${f.line}:${f.column}")
+                // absolute path, not relative-to-scanRoot: keeps IDE/terminal file:line:column
+                // click-to-open working regardless of the terminal's own cwd.
+                println("    ${f.file}:${f.line}:${f.column}")
                 sourceLineWithCaret(f)?.forEach { println("      $it") }
             }
         }

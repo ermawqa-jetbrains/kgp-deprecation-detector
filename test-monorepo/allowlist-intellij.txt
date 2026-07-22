@@ -28,7 +28,7 @@ org.jetbrains.kotlin.gradle.dsl.KotlinJsOptions$DefaultImpls.getTarget
 org.jetbrains.kotlin.gradle.dsl.KotlinJsProjectExtension.getTarget
 
 # "getCompilation" collides with the lambda variable name `compilation`
-org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink.getCompilation
+# org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink.getCompilation
 
 # "getMain" collides with a generic `main = ...` variable assignment
 org.jetbrains.kotlin.gradle.dsl.KotlinJsOptions$DefaultImpls.getMain
