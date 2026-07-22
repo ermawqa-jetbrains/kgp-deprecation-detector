@@ -7,14 +7,18 @@ import java.io.PrintStream
 import kotlin.system.exitProcess
 
 /**
- * Scans a monorepo for **embedded Gradle scripts** - Groovy or Kotlin-DSL scripts hardcoded as
- * string literals inside `.kt`/`.java` (IDE-injected init/build scripts) - for usages of
- * `@Deprecated` KGP APIs. Motivation: KT-85590
+ * Scans a monorepo for two kinds of blind spot the compiler can't see through, both matched
+ * against the same `@Deprecated` KGP name index read from the KGP jars:
+ *  - **Embedded Gradle scripts** - Groovy or Kotlin-DSL scripts hardcoded as string literals
+ *    inside `.kt`/`.java` (IDE-injected init/build scripts). Motivation: KT-85590
+ *  - **Reflective calls** - a member name passed as a string literal to a `callReflective*`
+ *    helper (cross-KGP-version compat dispatch), resolved only at runtime.
  *
  * Real `.gradle.kts` files are already resolved in-editor by IntelliJ, so their deprecation
- * warnings are already visible. Embedded scripts are not: they are strings, never compiled, and
- * Groovy is dynamically typed so no frontend could resolve them anyway. This tool restores that
- * missing signal by name-matching against the deprecated-API index read from the KGP jars.
+ * warnings are already visible - out of scope here. Both cases above are not: a hardcoded script
+ * is never compiled (Groovy can't be resolved by any frontend anyway), and a reflective call's
+ * target name is never seen by the compiler as a call to that member. This tool restores that
+ * missing signal by name-matching.
  *
  * Usage: `<scan-root> [<allowlist-file>]`
  *  - allowlist-file: one deprecated-symbol qualified name per line; `#` starts a comment.
@@ -77,13 +81,21 @@ fun main(args: Array<String>) {
 
     val scanner = EmbeddedScriptScanner(index)
     val candidates = EmbeddedScriptFinder.candidates(scanRoot, excludePatterns).toList()
-    val findings = candidates.parallelStream().map { file ->
+    val embeddedFindings = candidates.parallelStream().map { file ->
         EmbeddedScriptExtractor.extract(file).flatMap { s ->
             scanner.scanText(s.text, file.path, s.startLine, s.startColumn)
         }
-    }.toList().flatten().filterNot { it.symbol in allowlist }
+    }.toList().flatten()
 
-    println("Scanned ${candidates.size} candidate file(s).")
+    val reflectiveScanner = ReflectiveCallArgScanner(index)
+    val reflectiveCandidates = ReflectiveCallFinder.candidates(scanRoot, excludePatterns).toList()
+    val reflectiveFindings = reflectiveCandidates.parallelStream().map { file ->
+        reflectiveScanner.scan(ReflectiveCallArgExtractor.extract(file), file.path)
+    }.toList().flatten()
+
+    val findings = (embeddedFindings + reflectiveFindings).filterNot { it.symbol in allowlist }
+
+    println("Scanned ${candidates.size} embedded-script candidate file(s), ${reflectiveCandidates.size} reflective-call candidate file(s).")
     println()
     report(findings, scanRoot)
 
