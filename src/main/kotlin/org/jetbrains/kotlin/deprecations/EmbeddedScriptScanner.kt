@@ -1,17 +1,13 @@
 package org.jetbrains.kotlin.deprecations
 
 /**
- * Heuristic, name-based matcher for embedded Gradle scripts (Groovy or Kotlin DSL, hardcoded as
- * string literals). These are never compiled — Groovy can't be resolved by any frontend, and a
- * Kotlin-DSL string literal is just text to the surrounding `.kt`/`.java` compile - so the only
- * approach is whole-word name matching against the deprecated-API [index] (from
- * [KgpDeprecationExtractor]). Comments and string/char literals are masked first so a name
- * inside them is never matched.
+ * Name-based heuristic matcher for embedded Gradle scripts (Groovy or Kotlin DSL, hardcoded as
+ * string literals)
  */
 class EmbeddedScriptScanner(index: List<DeprecatedSymbol>) {
 
-    // 0ne whole-word pattern per searchable term. Terms shorter than 4 chars and the
-    // JVM ctor/clinit names are dropped to keep generic-name noise down.
+    // one whole-word pattern per searchable term. Terms shorter than 4 chars and the
+    // JVM ctor/clinit names are dropped to keep generic-name noise down
     private val searchIndex: List<Pair<Regex, DeprecatedSymbol>> = index
         .flatMap { symbol -> setOfNotNull(symbol.searchName, symbol.memberName).map { it to symbol } }
         .filter { (term, _) -> term.isNotBlank() && term != "<init>" && term != "<clinit>" && term.length >= 4 }
@@ -52,8 +48,8 @@ class EmbeddedScriptScanner(index: List<DeprecatedSymbol>) {
 /**
  * Replace comments and string/char literals with spaces while preserving line structure
  * (newlines kept; line/column offsets unchanged). Handles Kotlin and Groovy syntax: `//`
- * line comments, `/* */` block comments, `"…"`, `"""…"""`, `'…'`, `'''…'''`. Limitation:
- * string-template `${…}` contents are masked along with the surrounding string; nested
+ * line comments, `/* */` block comments, `"…"`, `"""…"""`, `'…'`, `'''…'''`.
+ * Limitation: string-template `${…}` contents are masked along with the surrounding string; nested
  * block comments are not supported.
  */
 internal fun maskCommentsAndStrings(src: String): String {

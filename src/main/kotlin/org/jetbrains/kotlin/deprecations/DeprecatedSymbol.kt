@@ -17,7 +17,7 @@ data class DeprecatedSymbol(
     val qualifiedName: String
         get() = if (memberName != null) "$className.$memberName" else className
 
-    /** Kotlin property access name derived from a JVM getter/setter (`getFoo` -> `foo`). */
+    /** Kotlin property access name derived from a JVM getter/setter (`getFoo` -> `foo`) */
     val searchName: String
         get() {
             val name = memberName ?: return className.substringAfterLast('.')

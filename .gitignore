@@ -44,3 +44,8 @@ bin/
 ### Claude Code session ###
 .claude/
 CLAUDE.md
+
+### Junie Code session ###
+.junie/
+AGENTS.md
+

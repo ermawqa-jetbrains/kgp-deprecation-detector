@@ -17,24 +17,28 @@ import kotlin.system.exitProcess
  * Exit 1 if any `ERROR`- or `HIDDEN`-level match is found, else 0.
  */
 fun main(args: Array<String>) {
-    // create report file
+    // create report file. Mirrors everything printed to stdout/stderr into `-PreportFile`
     val reportFilePath = setUpReportFileTee()
 
+    // make sure agrs not empty
     if (args.isEmpty() || args[0].isBlank()) {
         printHelpUsage()
         return
     }
 
+    // make sure root is directory
     val scanRoot = File(args[0]).canonicalFile
     if (!scanRoot.isDirectory) {
         System.err.println("Not a directory: ${scanRoot.path}")
         return
     }
 
+    // get allowlist
     val allowlist = args.getOrNull(1)?.takeIf { it.isNotBlank() }
         ?.let { loadAllowlist(File(it)) ?: return } ?: emptySet()
 
-    // exclude test fixtures + known non-script false positives; -PexcludePatterns adds more on top
+    // exclude test fixtures + known non-script false positives;
+    // -PexcludePatterns adds more on top
     val defaultExcludes = listOf(
         "/testData/", "/testdata/", "/testResources/", "/testSources/", "/testSrc/",
         "/test/", "/tests/", "/integration-tests/", "/agpIntegrationTestSrc/", "/resources/",
@@ -48,6 +52,7 @@ fun main(args: Array<String>) {
         .split(',').map { it.trim() }.filter { it.isNotBlank() }
     val excludePatterns = (defaultExcludes + userExcludes).distinct()
 
+    //check availability of JAR for given (or default) version
     val engineVersion = System.getProperty("kgp.engineVersion")?.takeIf { it.isNotBlank() }
     val jars = System.getProperty("kgp.pluginJars").orEmpty()
         .split(File.pathSeparator).filter { it.isNotBlank() }
@@ -55,13 +60,14 @@ fun main(args: Array<String>) {
         System.err.println("No KGP jars provided (kgp.pluginJars) - nothing to match against.")
         return
     }
+    // get list of deprecated APIs from JAR
     val index = jars.flatMap { runCatching { KgpDeprecationExtractor.extract(it) }.getOrDefault(emptyList()) }
     if (index.isEmpty()) {
         System.err.println("No @Deprecated symbols found in the KGP jars.")
         return
     }
 
-    // print key info about current detection
+    // print key info about the current session at the beginning
     println("KGP deprecation check (embedded scripts)")
     println("  Scanning : ${scanRoot.path}")
     if (engineVersion != null) println("  KGP      : $engineVersion (${index.size} deprecated symbol(s) indexed)")
@@ -70,20 +76,27 @@ fun main(args: Array<String>) {
     if (reportFilePath != null) println("  Report   : $reportFilePath")
     println()
 
+    /** SCAN 1: Scan for embedded scripts **/
+    // scan monorepo on candidate files and get list
     val scanner = EmbeddedScriptScanner(index)
     val candidates = EmbeddedScriptFinder.candidates(scanRoot, excludePatterns).toList()
+    // extract embedded scripts from candidate files and return a list
     val embeddedFindings = candidates.parallelStream().map { file ->
         EmbeddedScriptExtractor.extract(file).flatMap { s ->
             scanner.scanText(s.text, file.path, s.startLine, s.startColumn)
         }
     }.toList().flatten()
 
+    /** SCAN 2: Scan for reflective calls **/
+    // scan monorepo on candidate files and get list
     val reflectiveScanner = ReflectiveCallArgScanner(index)
     val reflectiveCandidates = ReflectiveCallFinder.candidates(scanRoot, excludePatterns).toList()
+    //extract reflective calls from candidate files and return a list
     val reflectiveFindings = reflectiveCandidates.parallelStream().map { file ->
         reflectiveScanner.scan(ReflectiveCallArgExtractor.extract(file), file.path)
     }.toList().flatten()
 
+    // merge findings from both scans
     val findings = (embeddedFindings + reflectiveFindings).filterNot { it.symbol in allowlist }
 
     println("Scanned ${candidates.size} embedded-script candidate file(s), ${reflectiveCandidates.size} reflective-call candidate file(s).")
@@ -93,7 +106,7 @@ fun main(args: Array<String>) {
     val errors = findings.count { it.level == DeprecationLevel.ERROR }
     val hidden = findings.count { it.level == DeprecationLevel.HIDDEN }
 
-    // Gate: ERROR or HIDDEN fails the run; WARNING-only (or clean) passes.
+    // Gate: WARNING-only (or clean) passes; ERROR or HIDDEN fails the run
     if (errors > 0 || hidden > 0) {
         System.err.println("Result: FAIL")
         exitProcess(1)
@@ -102,11 +115,6 @@ fun main(args: Array<String>) {
     }
 }
 
-/**
- * Mirrors everything printed to stdout/stderr into `-PreportFile` (enabled by default, see
- * build.gradle.kts default path; pass an empty value to disable). Returns the report path, or
- * null if disabled.
- */
 private fun setUpReportFileTee(): String? {
     val reportFilePath = System.getProperty("kgp.reportFile")?.takeIf { it.isNotBlank() }
     reportFilePath?.let { path ->

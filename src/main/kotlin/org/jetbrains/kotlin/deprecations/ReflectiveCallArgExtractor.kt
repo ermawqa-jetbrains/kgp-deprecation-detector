@@ -2,17 +2,12 @@ package org.jetbrains.kotlin.deprecations
 
 import java.io.File
 
-/** A string-literal method/field name passed as the first arg to a `callReflective*` helper. */
+/** A string-literal method/field name passed as the first arg to a `callReflective*` helper */
 data class ReflectiveCallArg(val name: String, val line: Int, val column: Int)
 
 /**
- * Pulls reflective-call target names out of `.kt`/`.java` source, e.g.
- * `instance.callReflectiveGetter("getCompilation", logger)`. The target name is resolved only
- * at runtime via reflection - the compiler never sees it as a call to that member - the same
- * blind spot as an embedded Gradle script, so it's matched against the deprecated-API name
- * index the same way [EmbeddedScriptScanner] matches embedded script text. Unlike an embedded
- * script, the name here is already an isolated identifier, so no whole-word/masking pass is
- * needed downstream - see [ReflectiveCallArgScanner].
+ * Pulls reflective-call target names out of `.kt`/`.java` source,
+ * e.g. `instance.callReflectiveGetter("getCompilation", logger)`
  */
 object ReflectiveCallArgExtractor {
 

@@ -36,7 +36,7 @@ object EmbeddedScriptFinder {
         ).start()
         val bytes = proc.inputStream.readBytes()
         val code = proc.waitFor()
-        // rg exit codes: 0 = matches, 1 = no matches, >=2 = error (fall back to a walk).
+        // rg exit codes: 0 = matches, 1 = no matches, >=2 = error (fall back to a walk)
         if (code >= 2) null
         else String(bytes).split(' ').filter { it.isNotBlank() }.map(::File)
     } catch (e: IOException) {

@@ -5,8 +5,7 @@ import java.io.IOException
 
 /**
  * Finds `.kt`/`.java` files that call a `callReflective*` helper - the reflective-dispatch
- * convention used for cross-KGP-version compatibility (e.g.
- * `callReflectiveGetter("getCompilation", logger)`).
+ * convention used for cross-KGP-version compatibility (e.g. `callReflectiveGetter("getCompilation", logger)`).
  */
 object ReflectiveCallFinder {
 
@@ -20,7 +19,7 @@ object ReflectiveCallFinder {
         else results.filter { f -> excludePatterns.none { pat -> f.path.contains(pat) } }
     }
 
-    /** Returns matched files, or null if `rg` could not be run (falls back to a walk). */
+    // returns matched files, or null if `rg` could not be run (falls back to a walk)
     private fun runRipgrep(root: File): List<File>? = try {
         val proc = ProcessBuilder(
             "rg", "-l", "-0", "--no-messages",

@@ -3,25 +3,18 @@ package org.jetbrains.kotlin.deprecations
 import java.io.File
 
 data class EmbeddedScript(
-    /** 1-based line in the host file of the literal's first content character */
     val startLine: Int,
-    /** 1-based column in the host file of the literal's first content character */
     val startColumn: Int,
     val text: String,
 )
 
 /**
- * Pulls Gradle script fragments out of `.kt`/`.java` source — IDE-injected init/build
- * scripts hardcoded as triple-quoted string literals (e.g. `val initScript = """ … """`).
- * The embedded script may be written in Groovy or Kotlin DSL; [SCRIPT_MARKER] covers idioms
- * from both, since matching downstream (name-based, in [EmbeddedScriptScanner]) is the same
- * either way.
+ * Pulls Gradle script fragments out of `.kt`/`.java` source
  *
  * v1 handles multiline triple-quoted literals only (Gradle scripts are always multiline);
- * single-line `"…"` scripts are out of scope. The Kotlin multi-dollar prefix (`$$"""…"""`)
- * is handled transparently - the `$$` are ordinary characters before the `"""` delimiter.
+ * single-line scripts are out of scope.
  *
- * A literal is only returned if it looks like a Gradle script (per [SCRIPT_MARKER]) — but if the
+ * A literal is only returned if it looks like a Gradle script (per [SCRIPT_MARKER]) - but if the
  * literal is preceded by an `@Language("…")` annotation (a real Kotlin annotation, or the `//
  * @Language("…")` comment form used on locals), that tag is authoritative and skipped only when
  * it names a language that isn't Gradle-ish (see [ALLOWED_LANGUAGES]): this is what keeps e.g. a
