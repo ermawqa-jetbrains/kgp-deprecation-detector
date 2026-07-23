@@ -68,7 +68,7 @@ fun main(args: Array<String>) {
     }
 
     // print key info about the current session at the beginning
-    println("KGP deprecation check (embedded scripts)")
+    println("KGP DEPRECATION CHECK")
     println("  Scanning : ${scanRoot.path}")
     if (engineVersion != null) println("  KGP      : $engineVersion (${index.size} deprecated symbol(s) indexed)")
     println("  Allowlist: ${if (allowlist.isEmpty()) "(none)" else "${allowlist.size} entries"}")
