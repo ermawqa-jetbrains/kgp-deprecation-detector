@@ -52,7 +52,7 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     // identify monorepo
     val monorepo = project.properties["monorepoDir"]?.toString()?.takeIf { it.isNotBlank() }
         ?: "test-monorepo"
-    //identify allowlist
+    // identify allowlist
     val allowlistArg = project.properties["allowlist"]?.toString().orEmpty()
     args = listOf(monorepo, allowlistArg)
 }

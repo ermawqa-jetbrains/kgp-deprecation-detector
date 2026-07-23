@@ -53,9 +53,7 @@ KGP jars.
       so no whole-word regex/masking is needed here.
 
 Both passes' findings are combined, then the allowlist is applied once. This is pure offline text
-matching - no Gradle, no daemon, no network beyond the initial KGP jar download. A full monorepo
-scan runs in seconds to low minutes, not the tens of minutes a Gradle-driven resolution pass
-would take.
+matching - no Gradle, no daemon, no network beyond the initial KGP jar download. 
 
 **This is name-matching, not resolution - it has false positives.** A deprecated KGP name and an
 unrelated same-named symbol are indistinguishable by text alone, and generic names (`target`,

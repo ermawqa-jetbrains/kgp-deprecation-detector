@@ -59,7 +59,7 @@ private class DeprecationClassVisitor(
                 // Kotlin emits property-level @Deprecated on a synthetic
                 // `<name>$annotations` method, not on the real getter. Strip
                 // the suffix so the recorded memberName matches the JVM
-                // accessor that user code actually invokes.
+                // accessor that user code actually invokes
                 val canonicalName = name.removeSuffix("\$annotations")
                 return DeprecationAnnotationVisitor { level, message, replaceWith ->
                     onDeprecated(DeprecatedSymbol(className, canonicalName, descriptor, level, message, replaceWith))
