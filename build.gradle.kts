@@ -9,7 +9,7 @@ repositories {
     maven("https://packages.jetbrains.team/maven/p/kt/dev")
 }
 
-// KGP version whose @Deprecated API set is indexed for name-matching.
+// KGP version whose @Deprecated API set is indexed for name-matching
 // override with -PkgpEngineVersion=<ver> to match the target monorepo's KGP version
 val engineVersion = (findProperty("kgpEngineVersion") as String?) ?: "2.4.0"
 
@@ -53,7 +53,7 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     args = listOf(monorepo, allowlistArg)
 }
 
-// FOR TESTING ONLY. Secondary task to print out all deprecated APIs from KGP JAR.
+// FOR TESTING PURPOSES ONLY: secondary task to print out all deprecated APIs from KGP JAR.
 tasks.register<JavaExec>("printKgpDeprecations") {
     group = "verification"
     description = "extracts & prints all deprecated APIs from given KGP jar"

@@ -8,4 +8,17 @@ pluginManagement {
         kotlin("jvm") version "2.4.0"
     }
 }
+
+plugins {
+    id ("com.gradle.develocity") version "4.3"
+}
+
+develocity {
+    buildScan {
+        termsOfUseUrl.set("https://gradle.com/help/legal-terms-of-use")
+        termsOfUseAgree.set("yes")
+    }
+    server.set("https://ge.labs.jb.gg")
+}
+
 rootProject.name = "kgp-deprecation-detector"
