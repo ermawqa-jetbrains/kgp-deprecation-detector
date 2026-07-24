@@ -31,7 +31,8 @@ object ReflectiveCallFinder {
         val code = proc.waitFor()
         if (code >= 2) null
         else String(bytes, Charsets.UTF_8).split('\u0000').filter { it.isNotBlank() }.map(::File)
-    } catch (e: IOException) {
+    } catch (_: IOException) {
+        RipgrepDetector.reportMissing()
         null // rg not installed
     }
 

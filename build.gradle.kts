@@ -53,7 +53,7 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     args = listOf(monorepo, allowlistArg)
 }
 
-// secondary task to print out all deprecated APIs from KGP JAR
+// FOR TESTING ONLY. Secondary task to print out all deprecated APIs from KGP JAR.
 tasks.register<JavaExec>("printKgpDeprecations") {
     group = "verification"
     description = "extracts & prints all deprecated APIs from given KGP jar"

@@ -9,7 +9,6 @@ import java.io.IOException
  * (`rg`) to pre-filter by marker. Without `rg` on the PATH it falls back to an in-process walk
  * with a cheap marker check.
  *
- * [excludePatterns] are substring patterns; any file whose absolute path contains one is skipped.
  */
 object EmbeddedScriptFinder {
 
@@ -39,7 +38,8 @@ object EmbeddedScriptFinder {
         // rg exit codes: 0 = matches, 1 = no matches, >=2 = error (fall back to a walk)
         if (code >= 2) null
         else String(bytes, Charsets.UTF_8).split('\u0000').filter { it.isNotBlank() }.map(::File)
-    } catch (e: IOException) {
+    } catch (_: IOException) {
+        RipgrepDetector.reportMissing()
         null // rg not installed
     }
 
