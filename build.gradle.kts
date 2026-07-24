@@ -4,10 +4,6 @@ plugins {
     kotlin("jvm")
 }
 
-kotlin {
-    jvmToolchain(17)
-}
-
 repositories {
     mavenCentral()
     maven("https://packages.jetbrains.team/maven/p/kt/dev")

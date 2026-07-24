@@ -26,7 +26,7 @@ object EmbeddedScriptFinder {
         else results.filter { f -> excludePatterns.none { pat -> f.path.contains(pat) } }
     }
 
-    /** Returns matched files, or null if `rg` could not be run (falls back to a walk). */
+    /** returns matched files, or null if `rg` could not be run (falls back to a walk) */
     private fun runRipgrep(root: File): List<File>? = try {
         val proc = ProcessBuilder(
             "rg", "-l", "-0", "--no-messages",
@@ -38,7 +38,7 @@ object EmbeddedScriptFinder {
         val code = proc.waitFor()
         // rg exit codes: 0 = matches, 1 = no matches, >=2 = error (fall back to a walk)
         if (code >= 2) null
-        else String(bytes).split(' ').filter { it.isNotBlank() }.map(::File)
+        else String(bytes, Charsets.UTF_8).split('\u0000').filter { it.isNotBlank() }.map(::File)
     } catch (e: IOException) {
         null // rg not installed
     }

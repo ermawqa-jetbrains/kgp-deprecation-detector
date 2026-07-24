@@ -30,7 +30,7 @@ object ReflectiveCallFinder {
         val bytes = proc.inputStream.readBytes()
         val code = proc.waitFor()
         if (code >= 2) null
-        else String(bytes).split(' ').filter { it.isNotBlank() }.map(::File)
+        else String(bytes, Charsets.UTF_8).split('\u0000').filter { it.isNotBlank() }.map(::File)
     } catch (e: IOException) {
         null // rg not installed
     }
