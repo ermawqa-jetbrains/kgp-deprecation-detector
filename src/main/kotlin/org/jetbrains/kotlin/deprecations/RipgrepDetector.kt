@@ -7,7 +7,7 @@ internal object RipgrepDetector {
 
     fun reportMissing() {
         if (warningPrinted.compareAndSet(false, true)) {
-            println("<--------INSTALL RG FOR FASTER DETECTION --------->")
+            println("INSTALL RG FOR FASTER DETECTION")
         }
     }
 

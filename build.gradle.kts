@@ -21,7 +21,7 @@ dependencies {
 }
 
 // KGP jars for the indexed engine version
-val kgpJars by configurations.creating
+val kgpJars = configurations.create("kgpJars")
 dependencies {
     kgpJars("org.jetbrains.kotlin:kotlin-gradle-plugin:$engineVersion")
 }
@@ -36,20 +36,20 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     // Surface the indexed KGP version in the tool's banner
     systemProperty("kgp.engineVersion", engineVersion)
     systemProperty("kgp.pluginJars", kgpJars.files.joinToString(File.pathSeparator))
-    project.properties["excludePatterns"]?.toString()?.takeIf { it.isNotBlank() }
+    findProperty("excludePatterns")?.toString()?.takeIf { it.isNotBlank() }
         ?.let { systemProperty("kgp.excludePatterns", it) }
 
     // mirrors terminal output into a report file
     // override the path with -PreportFile=<path>
-    val reportFile = project.properties["reportFile"]?.toString()?.takeIf { it.isNotBlank() }
+    val reportFile = findProperty("reportFile")?.toString()?.takeIf { it.isNotBlank() }
         ?: layout.buildDirectory.file("reports/kgp-deprecations.txt").get().asFile.path
     systemProperty("kgp.reportFile", reportFile)
 
     // identify monorepo
-    val monorepo = project.properties["monorepoDir"]?.toString()?.takeIf { it.isNotBlank() }
+    val monorepo = findProperty("monorepoDir")?.toString()?.takeIf { it.isNotBlank() }
         ?: "test-monorepo"
     // identify allowlist
-    val allowlistArg = project.properties["allowlist"]?.toString().orEmpty()
+    val allowlistArg = findProperty("allowlist")?.toString().orEmpty()
     args = listOf(monorepo, allowlistArg)
 }
 
