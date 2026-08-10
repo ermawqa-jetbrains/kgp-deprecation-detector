@@ -1,0 +1,342 @@
+{
+  "communities": {
+    "0": [
+      "classvisitor",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_deprecatedsymbol",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_deprecatedsymbol_deprecatedsymbol",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationannotationvisitor",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationannotationvisitor_visit",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationannotationvisitor_visitannotation",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationannotationvisitor_visitannotation_object_annotationvisitor_l111",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationannotationvisitor_visitannotation_object_annotationvisitor_l111_visit",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationannotationvisitor_visitend",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationannotationvisitor_visitenum",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationclassvisitor",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationclassvisitor_visitannotation",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationclassvisitor_visitfield",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationclassvisitor_visitfield_object_fieldvisitor_l75",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationclassvisitor_visitfield_object_fieldvisitor_l75_visitannotation",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationclassvisitor_visitmethod",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationclassvisitor_visitmethod_object_methodvisitor_l56",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationclassvisitor_visitmethod_object_methodvisitor_l56_visitannotation",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_isexcluded",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_kgpdeprecationextractor",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_kgpdeprecationextractor_extract",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest"
+    ],
+    "1": [
+      "outputstream",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_finding",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_finding_deprecationlevel",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_finding_deprecationlevel_error",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_finding_deprecationlevel_hidden",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_finding_deprecationlevel_warning",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_finding_finding",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_main",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_main_kt_bytearray",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_main_loadallowlist",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_main_main",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_main_printhelpusage",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_main_report",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_main_setupreportfiletee",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_main_sourcelinewithcaret",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_main_teeoutputstream",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_main_teeoutputstream_flush",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_main_teeoutputstream_write"
+    ],
+    "2": [
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractor",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractor_maskcomments",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractor_reflectivecallarg",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractor_reflectivecallargextractor",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractor_reflectivecallargextractor_extract",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractor_reflectivecallargextractor_extractfromtext",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargscanner",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargscanner_reflectivecallargscanner",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargscanner_reflectivecallargscanner_scan",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargscannertest",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargscannertest_reflectivecallargscannertest",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargscannertest_reflectivecallargscannertest_deduplicatessamesymbolonsameline",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargscannertest_reflectivecallargscannertest_doesnotmatchunrelatedname",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargscannertest_reflectivecallargscannertest_matcheseveryoverloadsharingthesamemembername",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargscannertest_reflectivecallargscannertest_matchesreflectivecallargbyexactmembername",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargscannertest_reflectivecallargscannertest_symbol"
+    ],
+    "3": [
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_deprecationspec",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_kgpdeprecationextractortest",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_kgpdeprecationextractortest_classbytes",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_kgpdeprecationextractortest_cleanup",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_kgpdeprecationextractortest_defaults_to_warning_when_level_attribute_missing",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_kgpdeprecationextractortest_excludes_internal_utils_impl_packages_and_android_classes",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_kgpdeprecationextractortest_extracts_all_deprecation_levels",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_kgpdeprecationextractortest_extracts_class_level_deprecation",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_kgpdeprecationextractortest_extracts_field_level_deprecation",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_kgpdeprecationextractortest_extracts_method_level_deprecation_with_replacewith",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_kgpdeprecationextractortest_ignores_non_deprecated_methods",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_kgpdeprecationextractortest_jarof",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_kgpdeprecationextractortest_strips_dollar_annotations_suffix_from_kotlin_property_synthetic_method",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_kgpdeprecationextractortest_writedeprecation",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_kt_bytearray",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_methodspec"
+    ],
+    "4": [
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractortest",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractortest_embeddedscriptextractortest",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractortest_embeddedscriptextractortest_extract",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractortest_embeddedscriptextractortest_extractsgroovyscriptlikeliteralwithstartline",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractortest_embeddedscriptextractortest_extractskotlindslscriptlikeliteral",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractortest_embeddedscriptextractortest_handlesmultidollarrawstring",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractortest_embeddedscriptextractortest_ignoresnonscriptproseliteral",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractortest_embeddedscriptextractortest_keepsliteraltaggedgroovyevenasacommentannotation",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractortest_embeddedscriptextractortest_keepsliteraltaggedkotlin",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractortest_embeddedscriptextractortest_returnsonlythescriptliteralwhenbothpresent",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractortest_embeddedscriptextractortest_skipsdisallowedlanguageevenwhentriplequoteisonitsownline",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractortest_embeddedscriptextractortest_skipsliteraltaggedwithadisallowedlanguage",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractortest_embeddedscriptextractortest_untaggedliteralstillusesthemarkerfallback"
+    ],
+    "5": [
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptscanner",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptscanner_embeddedscriptscanner",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptscanner_embeddedscriptscanner_scantext",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptscanner_maskcommentsandstrings",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptscannertest",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptscannertest_embeddedscriptscannertest",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptscannertest_embeddedscriptscannertest_doesnotflaginsidelinecomment",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptscannertest_embeddedscriptscannertest_doesnotflaginsidestringliteral",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptscannertest_embeddedscriptscannertest_doesnotflagunindexedidentifier",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptscannertest_embeddedscriptscannertest_flagsdeprecatednameingroovycode",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptscannertest_embeddedscriptscannertest_flagsdeprecatednameinkotlindslcode",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptscannertest_embeddedscriptscannertest_mapslinethroughtheoffset"
+    ],
+    "6": [
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractortest",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractortest_reflectivecallargextractortest",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractortest_reflectivecallargextractortest_doesnotmatchplainmethodcallwithoutreflectiveprefix",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractortest_reflectivecallargextractortest_extract",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractortest_reflectivecallargextractortest_extractsfromanygetterandbarevariant",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractortest_reflectivecallargextractortest_extractstargetnamefromcallreflectivegetter",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractortest_reflectivecallargextractortest_ignorescallsiteinsideblockcomment",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractortest_reflectivecallargextractortest_ignorescallsiteinsidelinecomment",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractortest_reflectivecallargextractortest_ignoresidentifierthatmerelycontainscallreflectiveasasubstring",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractortest_reflectivecallargextractortest_recordscorrectlinenumberforlatercallsite"
+    ],
+    "7": [
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractor",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractor_embeddedscript",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractor_embeddedscriptextractor",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractor_embeddedscriptextractor_extract",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractor_embeddedscriptextractor_extractfromtext",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractor_embeddedscriptextractor_languageannotationbefore"
+    ],
+    "8": [
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptfinder",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptfinder_embeddedscriptfinder",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptfinder_embeddedscriptfinder_candidates",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptfinder_embeddedscriptfinder_runripgrep",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptfinder_embeddedscriptfinder_walkfallback"
+    ],
+    "9": [
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallfinder",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallfinder_reflectivecallfinder",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallfinder_reflectivecallfinder_candidates",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallfinder_reflectivecallfinder_runripgrep",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallfinder_reflectivecallfinder_walkfallback"
+    ],
+    "10": [
+      "gradlew",
+      "gradlew__entry",
+      "gradlew_die",
+      "gradlew_warn"
+    ],
+    "11": [
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_ripgrepdetector",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_ripgrepdetector_ripgrepdetector",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_ripgrepdetector_ripgrepdetector_reportmissing",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_ripgrepdetector_ripgrepdetector_reset"
+    ],
+    "12": [
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_ripgrepdetectortest",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_ripgrepdetectortest_ripgrepdetectortest",
+      "src_test_kotlin_org_jetbrains_kotlin_deprecations_ripgrepdetectortest_ripgrepdetectortest_reportsmissingrgonlyonce"
+    ],
+    "13": [
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_printdeprecations",
+      "src_main_kotlin_org_jetbrains_kotlin_deprecations_printdeprecations_main"
+    ],
+    "14": [
+      "test_monorepo_reflective_reflectivekgpaccess",
+      "test_monorepo_reflective_reflectivekgpaccess_linktaskreflection"
+    ],
+    "15": [
+      "build_gradle"
+    ],
+    "16": [
+      "settings_gradle"
+    ],
+    "17": [
+      "test_monorepo_embedded_embeddedinitscript"
+    ],
+    "18": [
+      "test_monorepo_embedded_embeddedkotlindslscript"
+    ]
+  },
+  "cohesion": {
+    "0": 0.16205533596837945,
+    "1": 0.16993464052287582,
+    "2": 0.25,
+    "3": 0.35833333333333334,
+    "4": 0.28205128205128205,
+    "5": 0.18181818181818182,
+    "6": 0.35555555555555557,
+    "7": 0.6,
+    "8": 0.6,
+    "9": 0.6,
+    "10": 0.8333333333333334,
+    "11": 0.5,
+    "12": 0.6666666666666666,
+    "13": 1.0,
+    "14": 1.0,
+    "15": 1.0,
+    "16": 1.0,
+    "17": 1.0,
+    "18": 1.0
+  },
+  "gods": [
+    {
+      "id": "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_kgpdeprecationextractortest",
+      "label": "KgpDeprecationExtractorTest",
+      "degree": 15
+    },
+    {
+      "id": "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptextractortest_embeddedscriptextractortest",
+      "label": "EmbeddedScriptExtractorTest",
+      "degree": 12
+    },
+    {
+      "id": "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationannotationvisitor_visitannotation_object_annotationvisitor_l111",
+      "label": "AnnotationVisitor",
+      "degree": 11
+    },
+    {
+      "id": "src_main_kotlin_org_jetbrains_kotlin_deprecations_deprecatedsymbol_deprecatedsymbol",
+      "label": "DeprecatedSymbol",
+      "degree": 9
+    },
+    {
+      "id": "src_main_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractor_deprecationannotationvisitor",
+      "label": "DeprecationAnnotationVisitor",
+      "degree": 9
+    },
+    {
+      "id": "src_test_kotlin_org_jetbrains_kotlin_deprecations_embeddedscriptscannertest_embeddedscriptscannertest",
+      "label": "EmbeddedScriptScannerTest",
+      "degree": 9
+    },
+    {
+      "id": "src_test_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractortest_reflectivecallargextractortest",
+      "label": "ReflectiveCallArgExtractorTest",
+      "degree": 9
+    },
+    {
+      "id": "src_main_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargextractor_reflectivecallarg",
+      "label": "ReflectiveCallArg",
+      "degree": 8
+    },
+    {
+      "id": "src_main_kotlin_org_jetbrains_kotlin_deprecations_reflectivecallargscanner_reflectivecallargscanner",
+      "label": "ReflectiveCallArgScanner",
+      "degree": 8
+    },
+    {
+      "id": "src_test_kotlin_org_jetbrains_kotlin_deprecations_kgpdeprecationextractortest_deprecationspec",
+      "label": "DeprecationSpec",
+      "degree": 8
+    }
+  ],
+  "surprises": [
+    {
+      "source": "EmbeddedScriptScannerTest",
+      "target": "DeprecatedSymbol",
+      "source_files": [
+        "src/test/kotlin/org/jetbrains/kotlin/deprecations/EmbeddedScriptScannerTest.kt",
+        "src/main/kotlin/org/jetbrains/kotlin/deprecations/DeprecatedSymbol.kt"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities"
+    },
+    {
+      "source": "main()",
+      "target": "EmbeddedScriptScanner",
+      "source_files": [
+        "src/main/kotlin/org/jetbrains/kotlin/deprecations/Main.kt",
+        "src/main/kotlin/org/jetbrains/kotlin/deprecations/EmbeddedScriptScanner.kt"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities"
+    },
+    {
+      "source": "main()",
+      "target": "ReflectiveCallArgScanner",
+      "source_files": [
+        "src/main/kotlin/org/jetbrains/kotlin/deprecations/Main.kt",
+        "src/main/kotlin/org/jetbrains/kotlin/deprecations/ReflectiveCallArgScanner.kt"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities"
+    },
+    {
+      "source": "EmbeddedScriptScanner",
+      "target": "DeprecatedSymbol",
+      "source_files": [
+        "src/main/kotlin/org/jetbrains/kotlin/deprecations/EmbeddedScriptScanner.kt",
+        "src/main/kotlin/org/jetbrains/kotlin/deprecations/DeprecatedSymbol.kt"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "bridges separate communities"
+    },
+    {
+      "source": "ReflectiveCallArgScanner",
+      "target": "DeprecatedSymbol",
+      "source_files": [
+        "src/main/kotlin/org/jetbrains/kotlin/deprecations/ReflectiveCallArgScanner.kt",
+        "src/main/kotlin/org/jetbrains/kotlin/deprecations/DeprecatedSymbol.kt"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "bridges separate communities"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `DeprecatedSymbol` connect `AnnotationVisitor` to `ReflectiveCallArg`, `EmbeddedScriptScannerTest`?",
+      "why": "High betweenness centrality (0.201) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `AnnotationVisitor` connect `AnnotationVisitor` to `KgpDeprecationExtractorTest`?",
+      "why": "High betweenness centrality (0.125) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `ReflectiveCallArgScanner` connect `ReflectiveCallArg` to `AnnotationVisitor`, `Main.kt`?",
+      "why": "High betweenness centrality (0.081) - this node is a cross-community bridge."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 2 inferred relationships involving `DeprecatedSymbol` (e.g. with `EmbeddedScriptScannerTest` and `.symbol()`) actually correct?",
+      "why": "`DeprecatedSymbol` has 2 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `WARNING`, `ERROR`, `HIDDEN` to the rest of the system?",
+      "why": "4 weakly-connected nodes found - possible documentation gaps or missing edges."
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{"nodes": [{"id": "$graphify-root$_test_monorepo_embedded_embeddedinitscript_kt", "label": "EmbeddedInitScript.kt", "file_type": "code", "source_file": "test-monorepo/embedded/EmbeddedInitScript.kt", "source_location": "L1"}], "edges": [], "raw_calls": [], "kotlin_package": "embedded"}

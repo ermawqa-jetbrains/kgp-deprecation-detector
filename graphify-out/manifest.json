@@ -1,0 +1,122 @@
+{
+  "build.gradle.kts": {
+    "mtime": 1785159601.8964837,
+    "ast_hash": "bf1d7a697ef8f3ebe5d3ab3ecdb4c580",
+    "semantic_hash": "bf1d7a697ef8f3ebe5d3ab3ecdb4c580"
+  },
+  "gradlew": {
+    "mtime": 1778156812.4533322,
+    "ast_hash": "48fe0bd77a66bbb62c1150926ab1332c",
+    "semantic_hash": "48fe0bd77a66bbb62c1150926ab1332c"
+  },
+  "settings.gradle.kts": {
+    "mtime": 1784890096.200571,
+    "ast_hash": "eddb0afea20eff15cb4d0b1fe912025f",
+    "semantic_hash": "eddb0afea20eff15cb4d0b1fe912025f"
+  },
+  "src/main/kotlin/org/jetbrains/kotlin/deprecations/DeprecatedSymbol.kt": {
+    "mtime": 1784824244.4155526,
+    "ast_hash": "e5733356634ed9bb0e1cda0477d9a55e",
+    "semantic_hash": "e5733356634ed9bb0e1cda0477d9a55e"
+  },
+  "src/main/kotlin/org/jetbrains/kotlin/deprecations/EmbeddedScriptExtractor.kt": {
+    "mtime": 1784804809.642884,
+    "ast_hash": "37176221d7bf35a671210af1528ed733",
+    "semantic_hash": "37176221d7bf35a671210af1528ed733"
+  },
+  "src/main/kotlin/org/jetbrains/kotlin/deprecations/EmbeddedScriptFinder.kt": {
+    "mtime": 1784888399.297322,
+    "ast_hash": "2811608f72a880d561a2a145af5aa68f",
+    "semantic_hash": "2811608f72a880d561a2a145af5aa68f"
+  },
+  "src/main/kotlin/org/jetbrains/kotlin/deprecations/EmbeddedScriptScanner.kt": {
+    "mtime": 1784805968.6279385,
+    "ast_hash": "f1ffbd67b5115c113feb4a4a955bc9d6",
+    "semantic_hash": "f1ffbd67b5115c113feb4a4a955bc9d6"
+  },
+  "src/main/kotlin/org/jetbrains/kotlin/deprecations/Finding.kt": {
+    "mtime": 1784560570.6617913,
+    "ast_hash": "877eee3176281acc5129ceb827c86adc",
+    "semantic_hash": "877eee3176281acc5129ceb827c86adc"
+  },
+  "src/main/kotlin/org/jetbrains/kotlin/deprecations/KgpDeprecationExtractor.kt": {
+    "mtime": 1784824350.1719503,
+    "ast_hash": "43f821d26d18390fcc68b87baf3fa9a7",
+    "semantic_hash": "43f821d26d18390fcc68b87baf3fa9a7"
+  },
+  "src/main/kotlin/org/jetbrains/kotlin/deprecations/Main.kt": {
+    "mtime": 1784822395.5650198,
+    "ast_hash": "26c36752afd1269f8729ac36575ed600",
+    "semantic_hash": "26c36752afd1269f8729ac36575ed600"
+  },
+  "src/main/kotlin/org/jetbrains/kotlin/deprecations/PrintDeprecations.kt": {
+    "mtime": 1784807006.6369534,
+    "ast_hash": "5918c71f68d5fb3ba7bbd5d19928493f",
+    "semantic_hash": "5918c71f68d5fb3ba7bbd5d19928493f"
+  },
+  "src/main/kotlin/org/jetbrains/kotlin/deprecations/ReflectiveCallArgExtractor.kt": {
+    "mtime": 1784806513.477995,
+    "ast_hash": "8cb94e4984e319ce9da735f3eb3cdfae",
+    "semantic_hash": "8cb94e4984e319ce9da735f3eb3cdfae"
+  },
+  "src/main/kotlin/org/jetbrains/kotlin/deprecations/ReflectiveCallArgScanner.kt": {
+    "mtime": 1784711710.9113295,
+    "ast_hash": "9a7b44b97af254d212dcb09f05799ef3",
+    "semantic_hash": "9a7b44b97af254d212dcb09f05799ef3"
+  },
+  "src/main/kotlin/org/jetbrains/kotlin/deprecations/ReflectiveCallFinder.kt": {
+    "mtime": 1784888399.3037016,
+    "ast_hash": "1ce77ab6920a09c5064a0713d01b8509",
+    "semantic_hash": "1ce77ab6920a09c5064a0713d01b8509"
+  },
+  "src/main/kotlin/org/jetbrains/kotlin/deprecations/RipgrepDetector.kt": {
+    "mtime": 1785159917.7328837,
+    "ast_hash": "1e7f1e90da99cb93df7c79485057afa6",
+    "semantic_hash": "1e7f1e90da99cb93df7c79485057afa6"
+  },
+  "src/test/kotlin/org/jetbrains/kotlin/deprecations/EmbeddedScriptExtractorTest.kt": {
+    "mtime": 1784562367.2171638,
+    "ast_hash": "2b3844f741668136cea797ee3d8e272a",
+    "semantic_hash": "2b3844f741668136cea797ee3d8e272a"
+  },
+  "src/test/kotlin/org/jetbrains/kotlin/deprecations/EmbeddedScriptScannerTest.kt": {
+    "mtime": 1784560793.3588877,
+    "ast_hash": "f2a849a7a8eeebb597f02ddb2303b9eb",
+    "semantic_hash": "f2a849a7a8eeebb597f02ddb2303b9eb"
+  },
+  "src/test/kotlin/org/jetbrains/kotlin/deprecations/KgpDeprecationExtractorTest.kt": {
+    "mtime": 1784824236.8302026,
+    "ast_hash": "e125775f8ff8a9af040ae74c84eaf2a8",
+    "semantic_hash": "e125775f8ff8a9af040ae74c84eaf2a8"
+  },
+  "src/test/kotlin/org/jetbrains/kotlin/deprecations/ReflectiveCallArgExtractorTest.kt": {
+    "mtime": 1784709788.5603817,
+    "ast_hash": "a13f61179a974f922e62ea934bd07821",
+    "semantic_hash": "a13f61179a974f922e62ea934bd07821"
+  },
+  "src/test/kotlin/org/jetbrains/kotlin/deprecations/ReflectiveCallArgScannerTest.kt": {
+    "mtime": 1784709838.6943147,
+    "ast_hash": "6b712fa8fe75bb10724277ed7f0c2762",
+    "semantic_hash": "6b712fa8fe75bb10724277ed7f0c2762"
+  },
+  "src/test/kotlin/org/jetbrains/kotlin/deprecations/RipgrepDetectorTest.kt": {
+    "mtime": 1785159715.4677916,
+    "ast_hash": "be81d504736db393fdbc02e6dc89b902",
+    "semantic_hash": "be81d504736db393fdbc02e6dc89b902"
+  },
+  "test-monorepo/embedded/EmbeddedInitScript.kt": {
+    "mtime": 1784711523.4740727,
+    "ast_hash": "52a8ecef29bc9d520e558fc7fc885f33",
+    "semantic_hash": "52a8ecef29bc9d520e558fc7fc885f33"
+  },
+  "test-monorepo/embedded/EmbeddedKotlinDslScript.kt": {
+    "mtime": 1784711710.9063036,
+    "ast_hash": "8e659e4bbd7d294e33af208eec6e6a47",
+    "semantic_hash": "8e659e4bbd7d294e33af208eec6e6a47"
+  },
+  "test-monorepo/reflective/ReflectiveKgpAccess.kt": {
+    "mtime": 1784711523.4809341,
+    "ast_hash": "ad8b185d3979ecd6252d749ffc25239d",
+    "semantic_hash": "ad8b185d3979ecd6252d749ffc25239d"
+  }
+}
