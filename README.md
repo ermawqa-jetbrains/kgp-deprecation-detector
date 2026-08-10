@@ -18,17 +18,44 @@ This tool restores the warning signal via **offline name-matching** against `@De
 
 ## How It Works
 
-1. **Index:** Reads every `@Deprecated` declaration out of KGP jars via ASM (no class loading or Gradle daemon required).
-2. **Pass 1 - Embedded Scripts** (`EmbeddedScriptFinder` → `EmbeddedScriptExtractor` → `EmbeddedScriptScanner`):
-   - Locates `.kt`/`.java` files under scan root (`ripgrep` pre-filter with walk fallback).
-   - Extracts triple-quoted script literals (Groovy or Kotlin-DSL).
-   - Skips literals explicitly tagged with non-Gradle `@Language("X")` (e.g. `@Language("Markdown")`).
-   - Masks comments/strings and performs whole-word matching of deprecated names against literal text.
-3. **Pass 2 - Reflective Calls** (`ReflectiveCallFinder` → `ReflectiveCallArgExtractor` → `ReflectiveCallArgScanner`):
-   - Locates `.kt`/`.java` files containing `callReflective*` markers.
-   - Extracts string-literal target names (comment-aware; strings preserved since the literal *is* the search target).
-   - Performs exact JVM member name lookup against the index.
-4. **Filtering & Output:** Combines findings from both passes, applies the allowlist once, and groups results by severity (`ERROR` → `HIDDEN` → `WARNING`).
+The detector operates in two independent passes combined with an index and a final allowlist filter:
+
+```
+ ┌─────────────────────────────────────────────────────────┐
+ │               1. INDEX GENERATION (ASM)                 │
+ │  KGP Jars ──► KgpDeprecationExtractor ──► Symbol Index  │
+ └────────────────────────────┬────────────────────────────┘
+                              │
+             ┌────────────────┴────────────────┐
+             ▼                                 ▼
+ ┌───────────────────────┐         ┌───────────────────────┐
+ │  PASS 1: EMBEDDED     │         │  PASS 2: REFLECTIVE   │
+ │        SCRIPTS        │         │         CALLS         │
+ ├───────────────────────┤         ├───────────────────────┤
+ │ 1. Finder (.kt/.java) │         │ 1. Finder (markers)   │
+ │ 2. Extractor (triple  │         │ 2. Extractor (string  │
+ │    quotes & @Language)│         │    literals)          │
+ │ 3. Scanner (masking & │         │ 3. Scanner (exact JVM │
+ │    whole-word match)  │         │    member lookup)     │
+ └───────────┬───────────┘         └───────────┬───────────┘
+             │                                 │
+             └────────────────┬────────────────┘
+                              ▼
+ ┌─────────────────────────────────────────────────────────┐
+ │              COMBINE FINDINGS & FILTER                  │
+ │  Combined Findings ──► Allowlist Filter ──► Severity    │
+ │                        (ERROR/HIDDEN → 1, WARNING → 0)  │
+ └─────────────────────────────────────────────────────────┘
+```
+
+### Pipeline Breakdown
+
+| Phase | Component | Action / Mechanism |
+| :--- | :--- | :--- |
+| **1. Index Generation** | `KgpDeprecationExtractor` | Reads every `@Deprecated` declaration directly from KGP jars via ASM (no class loading or Gradle daemon). |
+| **2. Pass 1 (Embedded Scripts)** | `EmbeddedScriptFinder`<br/>`EmbeddedScriptExtractor`<br/>`EmbeddedScriptScanner` | • Locates `.kt`/`.java` files using ripgrep/walk.<br/>• Extracts triple-quoted script literals (Groovy / Kotlin-DSL) and checks `@Language` tag.<br/>• Masks comments/strings and performs whole-word matching. |
+| **3. Pass 2 (Reflective Calls)** | `ReflectiveCallFinder`<br/>`ReflectiveCallArgExtractor`<br/>`ReflectiveCallArgScanner` | • Locates files containing `callReflective` markers.<br/>• Extracts target name string literals (preserving string content).<br/>• Performs exact JVM member name lookup. |
+| **4. Filtering & Output** | Allowlist & Exit Gate | • Combines findings from both passes.<br/>• Applies allowlist filter once.<br/>• Evaluates severity (`ERROR`/`HIDDEN` → exit 1, `WARNING` → exit 0). |
 
 > **Note on False Positives:** Because this is name-matching rather than compiler resolution, generic names (`target`, `project`, `compilation`, etc.) can cause collisions. Use an allowlist to suppress confirmed non-issues.
 
