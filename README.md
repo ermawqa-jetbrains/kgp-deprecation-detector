@@ -94,6 +94,12 @@ Matching is by name, never by resolution - Groovy is dynamically typed, a Kotlin
 - **Not seen:** a target constant declared in *another* file (matching on the simple name across files would give wrong values for same-named constants), or a name built by concatenation/interpolation (undecidable without the compiler). An unresolvable identifier yields no hit rather than a guess.
 - **Not seen by default:** deprecations in `internal`/`utils`/`impl` packages and `Android*` classes; the banner prints how many classes were dropped and `-PfullIndex` includes them.
 
+### Which Files Are Searched
+Both passes share one candidate search (`SourceFileFinder`): a ripgrep fast path with an in-process walk fallback when `rg` is not on the PATH. The two paths are pinned to the **same** semantic - every `.kt`/`.java` file under the scan root except `.git` - so whether `rg` happens to be installed changes only how long the scan takes, never which files it reports:
+- `.gitignore`/`.ignore` are **not** honoured (`--no-ignore`): a monorepo can gitignore generated-but-shipped sources; what to skip is `excludePatterns`' decision.
+- Hidden files and directories **are** scanned (`--hidden`), matching the walk fallback.
+- `.git` is skipped by both paths.
+
 ### Built-in Exclusions
 Drops test fixtures, test sources, and known false positives:
 `/testData/`, `/testdata/`, `/testResources/`, `/testSources/`, `/testSrc/`, `/test/`, `/tests/`, `/integration-tests/`, `/agpIntegrationTestSrc/`, `/resources/`, `/privacy/KotlinNotebookSystemPromptPrivacySafeWrapper.kt`, `/fleet/buildtool/bundles/helpers.kt`.
