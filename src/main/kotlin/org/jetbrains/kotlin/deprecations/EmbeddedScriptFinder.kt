@@ -11,7 +11,13 @@ import java.io.File
  */
 object EmbeddedScriptFinder {
 
-    private const val MARKER =
+    /**
+     * The single source of truth for what "looks like a Gradle script" (Groovy or Kotlin-DSL).
+     * Shared, as text, with [EmbeddedScriptExtractor.SCRIPT_MARKER] - keeping only one copy
+     * means the finder can never end up narrower than the extractor and silently lose
+     * candidates. Pinned by `EmbeddedScriptMarkerTest`.
+     */
+    internal const val MARKER =
         "allprojects|afterEvaluate|tasks\\.(create|register)|" +
             "gradle\\.(ext|rootProject|settingsEvaluated|buildFinished)|pluginManager|GradleVersion|" +
             "plugins\\s*\\{|kotlin\\s*\\{|dependencies\\s*\\{|compilerOptions|kotlinOptions|withType\\("

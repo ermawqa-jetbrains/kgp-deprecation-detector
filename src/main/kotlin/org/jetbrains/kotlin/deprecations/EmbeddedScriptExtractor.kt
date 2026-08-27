@@ -23,11 +23,9 @@ data class EmbeddedScript(
  */
 object EmbeddedScriptExtractor {
 
-    private val SCRIPT_MARKER = Regex(
-        "allprojects|afterEvaluate|tasks\\.(create|register)|" +
-            "gradle\\.(ext|rootProject|settingsEvaluated|buildFinished)|pluginManager|GradleVersion|" +
-            "plugins\\s*\\{|kotlin\\s*\\{|dependencies\\s*\\{|compilerOptions|kotlinOptions|withType\\(",
-    )
+    // Single source of truth: EmbeddedScriptFinder.MARKER (same pattern, used to pre-filter
+    // candidate files); kept here as one Regex so the two can never drift apart.
+    private val SCRIPT_MARKER = Regex(EmbeddedScriptFinder.MARKER)
     private val LANGUAGE_ANNOTATION = Regex("""@Language\(\s*"([^"]+)"\s*\)""")
     private val ALLOWED_LANGUAGES = setOf("groovy", "kotlin")
 
