@@ -8,8 +8,18 @@ internal object RipgrepDetector {
     fun reportMissing() {
         if (warningPrinted.compareAndSet(false, true)) {
             println(
-                "NOTE: ripgrep (rg) was not found on PATH - falling back to an in-process file walk. " +
-                "Install rg to make the scan much faster."
+                """
+                ================================================================================
+                [WARNING] ripgrep (rg) is NOT installed or not on PATH!
+                Scanning will be significantly slower (falling back to in-process file walk).
+                The scan results are identical, but installing 'rg' is strongly recommended:
+
+                  • macOS:   brew install ripgrep
+                  • Ubuntu:  sudo apt install ripgrep
+                  • Fedora:  sudo dnf install ripgrep
+                  • Windows: winget install BurntSushi.ripgrep.MSVC
+                ================================================================================
+                """.trimIndent()
             )
         }
     }

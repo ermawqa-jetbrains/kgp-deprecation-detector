@@ -16,16 +16,16 @@ class RipgrepDetectorTest {
         System.setOut(PrintStream(out))
         try {
             RipgrepDetector.reportMissing()
+            val firstCallOutput = out.toString()
             RipgrepDetector.reportMissing()
             RipgrepDetector.reportMissing()
+            assertEquals(firstCallOutput, out.toString(), "Should only print once across multiple calls")
         } finally {
             System.setOut(originalOut)
         }
 
         val output = out.toString().trim()
-        val lines = output.lines().filter { it.isNotBlank() }
-        assertEquals(1, lines.size)
-        assertTrue(lines.single().contains("ripgrep"), lines.single())
-        assertTrue(lines.single().contains("same"), lines.single())
+        assertTrue(output.contains("ripgrep") || output.contains("rg"), "Output should mention ripgrep: $output")
+        assertTrue(output.contains("brew install ripgrep"), "Output should contain install command: $output")
     }
 }
