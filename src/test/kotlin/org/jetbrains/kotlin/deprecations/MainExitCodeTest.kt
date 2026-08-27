@@ -21,7 +21,8 @@ import kotlin.test.assertEquals
 class MainExitCodeTest {
 
     private val tmp: File = createTempDirectory("kgp-exit-code").toFile()
-    private val properties = listOf("kgp.pluginJars", "kgp.engineVersion", "kgp.excludePatterns")
+    private val properties =
+        listOf("kgp.pluginJars", "kgp.engineVersion", "kgp.excludePatterns", "kgp.fullIndex")
     private val savedProperties = properties.associateWith { System.getProperty(it) }
 
     @AfterTest
@@ -108,6 +109,22 @@ class MainExitCodeTest {
     fun error_level_finding_exits_with_findings_code() {
         System.setProperty("kgp.pluginJars", jarWithDeprecation().absolutePath)
         assertEquals(EXIT_FINDINGS, runSilently(arrayOf(rootWithDeprecatedUsage().path)).first)
+    }
+
+    @Test
+    fun wrapped_reflective_call_is_found_end_to_end() {
+        // The call is formatted across lines, so the literal sits below `callReflectiveGetter(`.
+        System.setProperty("kgp.pluginJars", jarWithDeprecation().absolutePath)
+        val root = File(tmp, "reflect/src").apply { mkdirs() }
+        File(root, "Reflection.kt").writeText(
+            """
+            fun read(instance: Any) = instance.callReflectiveGetter(
+                "getDefaultSourceSetName",
+                logger,
+            )
+            """.trimIndent() + "\n"
+        )
+        assertEquals(EXIT_FINDINGS, runSilently(arrayOf(root.path)).first)
     }
 
     @Test

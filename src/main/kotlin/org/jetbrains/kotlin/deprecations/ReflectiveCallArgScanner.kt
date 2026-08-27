@@ -12,10 +12,12 @@ class ReflectiveCallArgScanner(index: List<DeprecatedSymbol>) {
 
     fun scan(args: List<ReflectiveCallArg>, file: String): List<Finding> {
         val findings = mutableListOf<Finding>()
-        val seen = mutableSetOf<Pair<Int, String>>() // (line, qualifiedName)
+        // (line, column, qualifiedName) - two reflective calls to the same member on one line are
+        // two usages and each gets its own caret.
+        val seen = mutableSetOf<Triple<Int, Int, String>>()
         for (arg in args) {
             for (symbol in byMemberName[arg.name].orEmpty()) {
-                if (!seen.add(arg.line to symbol.qualifiedName)) continue
+                if (!seen.add(Triple(arg.line, arg.column, symbol.qualifiedName))) continue
                 findings += Finding(
                     file = file,
                     line = arg.line,

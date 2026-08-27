@@ -15,12 +15,29 @@ import java.util.jar.JarFile
  */
 object KgpDeprecationExtractor {
 
-    fun extract(jarPath: String): List<DeprecatedSymbol> {
+    /** Index of one jar plus how many classes [isExcluded] kept out of it (0 when `fullIndex`). */
+    data class JarIndex(val symbols: List<DeprecatedSymbol>, val skippedClasses: Int)
+
+    fun extract(jarPath: String, fullIndex: Boolean = false): List<DeprecatedSymbol> =
+        extractIndex(jarPath, fullIndex).symbols
+
+    /**
+     * Same as [extract], but also reports how many classes the [isExcluded] package filter
+     * dropped - that filter shrinks the search space silently, so the count is surfaced in the
+     * banner and can be disabled entirely with `fullIndex`.
+     */
+    fun extractIndex(jarPath: String, fullIndex: Boolean = false): JarIndex {
         val results = mutableListOf<DeprecatedSymbol>()
+        var skipped = 0
 
         JarFile(jarPath).use { jar ->
             jar.entries().asSequence()
-                .filter { !it.isDirectory && it.name.endsWith(".class") && !it.name.isExcluded() }
+                .filter { !it.isDirectory && it.name.endsWith(".class") }
+                .filter { entry ->
+                    val excluded = !fullIndex && entry.name.isExcluded()
+                    if (excluded) skipped++
+                    !excluded
+                }
                 .forEach { entry ->
                     jar.getInputStream(entry).use { input ->
                         val reader = ClassReader(input)
@@ -30,7 +47,7 @@ object KgpDeprecationExtractor {
                 }
         }
 
-        return results
+        return JarIndex(results, skipped)
     }
 }
 
@@ -120,7 +137,10 @@ private class DeprecationAnnotationVisitor(
     override fun visitEnd() = onComplete(level, message, replaceWith)
 }
 
-// сlasses that are never used directly in Gradle build files.
+// Сlasses assumed never to be used directly in Gradle build files. Aggressive by nature - KGP
+// ships public API in packages containing `impl`/`utils`, and an `Android*` symbol is exactly
+// what an AGP-injected init script may touch - so it is opt-out via `fullIndex` and the number
+// of classes it drops is reported rather than hidden.
 private fun String.isExcluded(): Boolean {
     val segments = substringBeforeLast('/').split('/')
     val simpleName = substringAfterLast('/').removeSuffix(".class")

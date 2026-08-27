@@ -69,7 +69,8 @@ The detector operates in two independent passes combined with an index and a fin
     [-Pallowlist=/path/to/allowlist.txt] \
     [-PkgpEngineVersion=2.4.20-dev-5677] \
     [-PexcludePatterns=/foo/,/bar/] \
-    [-PreportFile=/path/to/report.txt]
+    [-PreportFile=/path/to/report.txt] \
+    [-PfullIndex]
 ```
 
 ### Parameters
@@ -81,8 +82,16 @@ The detector operates in two independent passes combined with an index and a fin
 | `kgpEngineVersion` | KGP version whose `@Deprecated` API set is indexed | `2.4.0` |
 | `excludePatterns` | Comma-separated path substrings to skip (added to built-in defaults) | Built-in test/fixture paths |
 | `reportFile` | Path to mirror stdout/stderr output for CI artifacts | `build/reports/kgp-deprecations.txt` |
+| `fullIndex` | Keep `internal`/`utils`/`impl` packages and `Android*` classes in the deprecation index (more coverage, more noise) | Filtered out |
 
 Unknown `-P` properties fail the build at configuration time (with a "did you mean" suggestion for near-misses). Gradle itself ignores unrecognised `-P` flags, so a typo such as `-PmonrepoDir=<path>` would otherwise silently scan the default `test-monorepo` fixture and report a clean run.
+
+### Matching Coverage And Its Limits
+Matching is by name, never by resolution - Groovy is dynamically typed, a Kotlin-DSL string literal is compiled by nothing, and a reflective target is known only at runtime. Within that:
+- Reflective call sites are matched over the whole file, so a call wrapped across lines (`callReflectiveGetter(` on one line, the name on the next) is found.
+- Every occurrence is reported separately, each with its own `file:line:column` and caret; identical hits at the same position are collapsed.
+- **Not seen:** a reflective target held in a `const val` or built by concatenation - only inline string literals are visible.
+- **Not seen by default:** deprecations in `internal`/`utils`/`impl` packages and `Android*` classes; the banner prints how many classes were dropped and `-PfullIndex` includes them.
 
 ### Built-in Exclusions
 Drops test fixtures, test sources, and known false positives:

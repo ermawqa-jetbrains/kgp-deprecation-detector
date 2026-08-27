@@ -77,13 +77,18 @@ internal fun run(args: Array<String>): Int {
         System.err.println("No KGP jars provided (kgp.pluginJars) - nothing to match against.")
         return EXIT_SETUP_FAILURE
     }
+    // `kgp.fullIndex` (-PfullIndex) disables the extractor's internal/utils/impl/Android package
+    // filter: it trades noise for coverage when a hit is expected in one of those packages.
+    val fullIndex = System.getProperty("kgp.fullIndex").toBoolean()
     // get list of deprecated APIs from JAR. A jar that fails to open is reported, never swallowed:
     // a silently partial index looks exactly like a clean run.
-    val index = jars.flatMap { jar ->
-        runCatching { KgpDeprecationExtractor.extract(jar) }
+    val jarIndexes = jars.map { jar ->
+        runCatching { KgpDeprecationExtractor.extractIndex(jar, fullIndex) }
             .onFailure { System.err.println("Failed to read KGP jar '$jar': $it") }
-            .getOrDefault(emptyList())
+            .getOrDefault(KgpDeprecationExtractor.JarIndex(emptyList(), 0))
     }
+    val index = jarIndexes.flatMap { it.symbols }
+    val skippedClasses = jarIndexes.sumOf { it.skippedClasses }
     if (index.isEmpty()) {
         System.err.println("No @Deprecated symbols found in the KGP jars.")
         return EXIT_SETUP_FAILURE
@@ -92,7 +97,10 @@ internal fun run(args: Array<String>): Int {
     // print key info about the current session at the beginning
     println("KGP DEPRECATION CHECK")
     println("  Scanning : ${scanRoot.path}")
-    if (engineVersion != null) println("  KGP      : $engineVersion (${index.size} deprecated symbol(s) indexed)")
+    println("  KGP      : ${engineVersion ?: "(version unknown)"} (${index.size} deprecated symbol(s) indexed)")
+    if (skippedClasses > 0) {
+        println("  Index    : $skippedClasses class(es) skipped (internal/utils/impl/Android) - pass -PfullIndex to include them")
+    }
     println("  Allowlist: ${if (allowlist.isEmpty()) "(none)" else "${allowlist.size} entries"}")
     if (excludePatterns.isNotEmpty()) println("  Excluded : ${excludePatterns.joinToString(", ")}")
     if (reportFilePath != null) println("  Report   : $reportFilePath")
@@ -164,7 +172,7 @@ private fun loadAllowlist(file: File): Set<String>? {
 
 private fun report(findings: List<Finding>) {
     if (findings.isEmpty()) {
-        println("No deprecated API usages found in embedded scripts.")
+        println("No deprecated API usages found in embedded scripts or reflective calls.")
         return
     }
     val affected = findings.map { it.file }.toSet().size
@@ -226,5 +234,5 @@ private fun printHelpUsage() {
     System.err.println()
     System.err.println("As a Gradle task:")
     System.err.println("  ./gradlew checkKgpDeprecations [-PmonorepoDir=<path>] [-Pallowlist=<path>] [-PkgpEngineVersion=<ver>]")
-    System.err.println("    [-PexcludePatterns=/foo/,/bar/] [-PreportFile=<path>]")
+    System.err.println("    [-PexcludePatterns=/foo/,/bar/] [-PreportFile=<path>] [-PfullIndex]")
 }

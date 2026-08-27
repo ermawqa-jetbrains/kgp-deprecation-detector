@@ -119,6 +119,40 @@ class KgpDeprecationExtractorTest {
     }
 
     @Test
+    fun fullIndex_keeps_excluded_packages_and_reports_no_skips() {
+        // The package filter is aggressive (KGP ships public API under `impl`/`utils`, and an
+        // Android-named symbol is what an AGP-injected script would touch), so it must be
+        // opt-out rather than unconditional.
+        val jar = jarOf(
+            "foo/Public.class" to classBytes("foo/Public", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "foo/internal/Hidden.class" to classBytes("foo/internal/Hidden", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "foo/utils/Helper.class" to classBytes("foo/utils/Helper", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "foo/AndroidThing.class" to classBytes("foo/AndroidThing", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+        )
+
+        val full = KgpDeprecationExtractor.extractIndex(jar.absolutePath, fullIndex = true)
+        assertEquals(
+            setOf("foo.Public", "foo.internal.Hidden", "foo.utils.Helper", "foo.AndroidThing"),
+            full.symbols.map { it.className }.toSet(),
+        )
+        assertEquals(0, full.skippedClasses)
+    }
+
+    @Test
+    fun reports_how_many_classes_the_package_filter_dropped() {
+        // A filter that silently shrinks the search space looks exactly like a clean jar.
+        val jar = jarOf(
+            "foo/Public.class" to classBytes("foo/Public", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "foo/internal/Hidden.class" to classBytes("foo/internal/Hidden", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "foo/utils/Helper.class" to classBytes("foo/utils/Helper", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+        )
+
+        val filtered = KgpDeprecationExtractor.extractIndex(jar.absolutePath)
+        assertEquals(1, filtered.symbols.size)
+        assertEquals(2, filtered.skippedClasses)
+    }
+
+    @Test
     fun defaults_to_WARNING_when_level_attribute_missing() {
         // Build a class whose @Deprecated annotation lacks the `level` attribute.
         val cw = ClassWriter(0)

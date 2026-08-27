@@ -61,6 +61,36 @@ class EmbeddedScriptScannerTest {
     }
 
     @Test
+    fun reportsEveryOccurrenceOnTheSameLine() {
+        // Two usages on one line are two hits: reporting only the first undercounts `Hits` and
+        // leaves the caret pointing at the wrong column for the second.
+        val text = "allprojects {\n  x(compilation.defaultSourceSetName, other.defaultSourceSetName)\n}\n"
+        val findings = scanner.scanText(text, "init.gradle", 1, 1)
+        assertEquals(2, findings.size)
+        assertEquals(listOf(2, 2), findings.map { it.line })
+        assertEquals(findings.map { it.column }.sorted(), findings.map { it.column })
+        assertEquals(2, findings.map { it.column }.distinct().size)
+    }
+
+    @Test
+    fun columnOnLinesAfterTheFirstIsAlreadyAbsolute() {
+        // A raw triple-quoted literal keeps the host file's indentation in its own content, so
+        // from line 2 on the in-content column IS the host column - only line 1 needs colOffset.
+        val text = "allprojects {\n    compilation.defaultSourceSetName\n}\n"
+        val f = scanner.scanText(text, "Provider.kt", 10, 30).single()
+        assertEquals(11, f.line)
+        assertEquals(17, f.column) // 4 spaces + "compilation." (12), 1-based
+    }
+
+    @Test
+    fun columnOnTheFirstLineIsShiftedByTheLiteralStart() {
+        val text = "compilation.defaultSourceSetName; allprojects { }\n"
+        val f = scanner.scanText(text, "Provider.kt", 10, 30).single()
+        assertEquals(10, f.line)
+        assertEquals(30 + 12, f.column)
+    }
+
+    @Test
     fun mapsLineThroughTheOffset() {
         // Script embedded at file line 50; the deprecated name is on the script's 3rd line.
         val text = "allprojects {\n  afterEvaluate {\n    compilation.defaultSourceSetName\n  }\n}\n"

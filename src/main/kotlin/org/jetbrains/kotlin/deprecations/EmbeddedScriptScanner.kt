@@ -21,24 +21,31 @@ class EmbeddedScriptScanner(index: List<DeprecatedSymbol>) {
     fun scanText(text: String, file: String, lineOffset: Int, colOffset: Int): List<Finding> {
         val masked = maskCommentsAndStrings(text).lines()
         val findings = mutableListOf<Finding>()
-        val seen = mutableSetOf<Pair<Int, String>>() // (absoluteLine, qualifiedName)
+        // (absoluteLine, absoluteColumn, qualifiedName): every distinct occurrence is reported,
+        // so a line using a deprecated API twice yields two hits with two accurate carets. The
+        // key still collapses index entries that resolve to the same qualified name.
+        val seen = mutableSetOf<Triple<Int, Int, String>>()
 
         masked.forEachIndexed { idx, maskedLine ->
             val contentLine = idx + 1 // 1-based within text
             val absoluteLine = lineOffset + contentLine - 1
             for ((pattern, symbol) in searchIndex) {
-                val match = pattern.find(maskedLine) ?: continue
-                if (!seen.add(absoluteLine to symbol.qualifiedName)) continue
-                val matchCol = match.range.first + 1 // 1-based within content line
-                val absoluteCol = if (contentLine == 1) colOffset + matchCol - 1 else matchCol
-                findings += Finding(
-                    file = file,
-                    line = absoluteLine,
-                    column = absoluteCol,
-                    symbol = symbol.qualifiedName,
-                    level = symbol.level,
-                    message = symbol.message,
-                )
+                for (match in pattern.findAll(maskedLine)) {
+                    val matchCol = match.range.first + 1 // 1-based within content line
+                    // Only line 1 needs the literal's start column: from line 2 on, the raw
+                    // triple-quoted content carries the host file's own indentation, so the
+                    // in-content column already is the host column.
+                    val absoluteCol = if (contentLine == 1) colOffset + matchCol - 1 else matchCol
+                    if (!seen.add(Triple(absoluteLine, absoluteCol, symbol.qualifiedName))) continue
+                    findings += Finding(
+                        file = file,
+                        line = absoluteLine,
+                        column = absoluteCol,
+                        symbol = symbol.qualifiedName,
+                        level = symbol.level,
+                        message = symbol.message,
+                    )
+                }
             }
         }
         return findings

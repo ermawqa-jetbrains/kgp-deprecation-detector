@@ -52,12 +52,27 @@ class ReflectiveCallArgScannerTest {
     }
 
     @Test
-    fun deduplicatesSameSymbolOnSameLine() {
+    fun reportsEveryCallSiteOnTheSameLineSeparately() {
+        // Two reflective calls to the same member on one line are two usages: reporting only the
+        // first undercounts the hit and points the caret at the wrong column for the second.
         val scanner = ReflectiveCallArgScanner(listOf(symbol("getTarget")))
         val findings = scanner.scan(
             listOf(
                 ReflectiveCallArg("getTarget", line = 1, column = 1),
                 ReflectiveCallArg("getTarget", line = 1, column = 40),
+            ),
+            "Foo.kt",
+        )
+        assertEquals(listOf(1, 40), findings.map { it.column })
+    }
+
+    @Test
+    fun deduplicatesSameSymbolAtTheSamePosition() {
+        val scanner = ReflectiveCallArgScanner(listOf(symbol("getTarget")))
+        val findings = scanner.scan(
+            listOf(
+                ReflectiveCallArg("getTarget", line = 1, column = 7),
+                ReflectiveCallArg("getTarget", line = 1, column = 7),
             ),
             "Foo.kt",
         )

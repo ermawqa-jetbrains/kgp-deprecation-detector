@@ -55,6 +55,37 @@ class ReflectiveCallArgExtractorTest {
     }
 
     @Test
+    fun extractsTargetNameWhenTheCallIsWrappedOverSeveralLines() {
+        // The formatter routinely wraps these calls, putting the literal on the next line. A
+        // line-by-line scan missed every such call site - a false-negative class in the very
+        // `gradleTooling/reflect/*.kt` files this pass targets.
+        val text = """
+            val x = instance.callReflectiveGetter(
+                "getDefaultSourceSetName",
+                logger,
+            )
+        """.trimIndent()
+        val arg = extract(text).single()
+        assertEquals("getDefaultSourceSetName", arg.name)
+        assertEquals(2, arg.line)
+        assertEquals(6, arg.column) // 4 spaces of indent + the opening quote
+    }
+
+    @Test
+    fun reportsColumnRelativeToItsOwnLine() {
+        val text = "val a = 1\nval b = x.callReflectiveGetter(\"getTarget\", logger)\n"
+        val arg = extract(text).single()
+        assertEquals(2, arg.line)
+        assertEquals(33, arg.column)
+    }
+
+    @Test
+    fun extractsBothCallSitesOnTheSameLine() {
+        val text = """a.callReflectiveGetter("getOne", logger); b.callReflectiveGetter("getTwo", logger)"""
+        assertEquals(listOf("getOne", "getTwo"), extract(text).map { it.name })
+    }
+
+    @Test
     fun doesNotMatchPlainMethodCallWithoutReflectivePrefix() {
         val text = """instance.getCompilation("getTarget", logger)"""
         assertEquals(emptyList(), extract(text))

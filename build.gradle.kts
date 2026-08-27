@@ -21,6 +21,7 @@ val knownProjectProperties = setOf(
     "kgpEngineVersion",
     "excludePatterns",
     "reportFile",
+    "fullIndex",
 )
 
 run {
@@ -85,6 +86,11 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     systemProperty("kgp.pluginJars", kgpJars.files.joinToString(File.pathSeparator))
     findProperty("excludePatterns")?.toString()?.takeIf { it.isNotBlank() }
         ?.let { systemProperty("kgp.excludePatterns", it) }
+    // -PfullIndex (value optional; `-PfullIndex` alone means true) keeps the internal/utils/impl/
+    // Android classes in the deprecation index instead of filtering them out
+    findProperty("fullIndex")?.let {
+        systemProperty("kgp.fullIndex", it.toString().takeIf { v -> v.isNotBlank() } ?: "true")
+    }
 
     // mirrors terminal output into a report file
     // override the path with -PreportFile=<path>
