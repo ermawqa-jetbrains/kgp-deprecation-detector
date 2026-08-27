@@ -72,7 +72,6 @@ internal fun run(args: Array<String>): Int {
 
     //check availability of JAR for given (or default) version
     val engineVersion = System.getProperty("kgp.engineVersion")?.takeIf { it.isNotBlank() }
-    val toolRevision = System.getProperty("kgp.toolRevision")?.takeIf { it.isNotBlank() }
     val jars = System.getProperty("kgp.pluginJars").orEmpty()
         .split(File.pathSeparator).filter { it.isNotBlank() }
     if (jars.isEmpty()) {
@@ -100,8 +99,6 @@ internal fun run(args: Array<String>): Int {
     println("KGP DEPRECATION CHECK")
     println("  Scanning : ${scanRoot.path}")
     println("  KGP      : ${engineVersion ?: "(version unknown)"} (${index.size} deprecated symbol(s) indexed)")
-    // Traceability: an archived report must say which revision of the tool produced it.
-    println("  Tool     : ${toolRevision ?: "(revision unknown)"}")
     if (skippedClasses > 0) {
         println("  Index    : $skippedClasses class(es) skipped (internal/utils/impl/Android) - pass -PfullIndex to include them")
     }

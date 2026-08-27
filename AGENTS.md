@@ -191,8 +191,7 @@ Pass 2 (reflective calls):
   `tasks.register` block, which is lazy enough (the block only runs when the task is in the
   graph, so `./gradlew help` never resolves the configuration). It must NOT be a `Provider`:
   `JavaExec.systemProperty` does not unwrap one and passes its `toString()` through, which the
-  tool then reports as `Failed to read KGP jar 'map(provider(...))'`. Same for
-  `kgp.toolRevision` — hence the `.get()`.
+  tool then reports as `Failed to read KGP jar 'map(provider(...))'`.
 - **`jvmToolchain(17)` is pinned.** The tool reads bytecode with ASM; "whatever JDK is on PATH"
   made local runs (JDK 26 here) and CI (17/21) compile to different bytecode with a different
   behaviour surface.
@@ -210,9 +209,10 @@ Pass 2 (reflective calls):
   violation. Pinned by `AllowlistTest` (which also fails on an entry with no preceding `#`
   comment). It is a *note*, not a failure: a version bump must not block the run it is warning
   about.
-- **The banner records the tool's own revision** (`kgp.toolRevision`, from `git describe
-  --always --dirty`), not just the KGP version — an archived CI report that can't be tied to a
-  commit can't be acted on. Missing property degrades to `(revision unknown)`, never fails.
+- **The banner stays minimal.** It records what was scanned, the KGP version and the allowlist —
+  nothing else. A `Tool : <git describe>` revision line was added once for CI traceability and
+  removed again: the check runs once per branching/deprecation phase and is read by developers,
+  so extra header noise costs more than it gives.
 - **Allowlist entries are qualified names** (`Finding.symbol`, e.g.
   `org.jetbrains.kotlin.gradle.plugin.KotlinCompilation.getDefaultSourceSetName`), not rendered
   signatures — there's no compiler involved to render one.

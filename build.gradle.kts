@@ -84,16 +84,6 @@ dependencies {
 
 
 /**
- * Revision of the tool itself, surfaced in the report banner. Without it an archived CI report
- * records which KGP version it matched against but not which code produced it, so a finding (or
- * its absence) can't be tied back to a commit.
- */
-val toolRevision: Provider<String> = providers.exec {
-    commandLine("git", "describe", "--always", "--dirty", "--abbrev=8")
-    isIgnoreExitValue = true
-}.standardOutput.asText.map { it.trim() }.map { it.ifBlank { "unknown" } }.orElse("unknown")
-
-/**
  * Scan root, resolved against the project directory at **configuration** time. A raw relative
  * string used to reach the JVM untouched, so a mistyped absolute path (the truncated
  * `/Useyermukhamed.shakhman/...` incident) was only caught after startup - and a path that
@@ -121,8 +111,6 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     mainClass.set("org.jetbrains.kotlin.deprecations.MainKt")
     // Surface the indexed KGP version in the tool's banner
     systemProperty("kgp.engineVersion", engineVersion)
-    // .get(): same reason as kgp.pluginJars below - systemProperty would stringify the Provider
-    systemProperty("kgp.toolRevision", toolRevision.get())
     // `asPath` instead of a manual joinToString; resolution happens here, which is lazy because
     // `tasks.register`'s configuration block only runs when the task is in the graph (so
     // `./gradlew help` never resolves it). It cannot be a Provider: JavaExec.systemProperty does
