@@ -120,4 +120,22 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     val monorepo = resolveScanRoot().path
     val allowlistArg = findProperty("allowlist")?.toString().orEmpty()
     args = listOf(monorepo, allowlistArg)
+
+    // Gradle turns any non-zero exit into its own generic failure, hiding the
+    // tool's 1 (findings) vs 2 (setup failure) distinction. Inspect it ourselves.
+    isIgnoreExitValue = true
+    val result = executionResult
+    doLast {
+        when (val code = result.get().exitValue) {
+            0 -> Unit
+            1 -> throw GradleException(
+                "KGP deprecation check FAILED: deprecated API usages found. See the report above."
+            )
+            2 -> throw GradleException(
+                "KGP deprecation check DID NOT RUN (setup failure, exit 2). " +
+                    "The check produced no verdict - fix the invocation and re-run."
+            )
+            else -> throw GradleException("KGP deprecation check exited unexpectedly with code $code.")
+        }
+    }
 }

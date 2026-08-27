@@ -120,6 +120,13 @@ Pass 2 (reflective calls):
   is restoring a missing signal. `1` (`EXIT_FINDINGS`) stays reserved for real violations so CI
   can distinguish the two. Per-jar extract failures are printed, never swallowed silently (a
   partial index looks exactly like a clean run). Pinned by `MainExitCodeTest`.
+- **The Gradle task must keep exit 1 and 2 distinguishable.** `JavaExec` turns any non-zero exit
+  into the same generic `BUILD FAILED`, so through `./gradlew checkKgpDeprecations` — the
+  documented entry point — CI could not tell "tool never ran" from "real violations". The task
+  sets `isIgnoreExitValue = true` and a `doLast` reads `executionResult.get().exitValue`, throwing
+  a different message per code (`0` passes, `1` FAILED, `2` DID NOT RUN, anything else
+  unexpected). `executionResult` must be captured into a local outside `doLast` (configuration
+  cache forbids referencing the task from its own action).
 - **Unknown `-P` properties must fail the build.** `build.gradle.kts` validates
   `gradle.startParameter.projectProperties` against `knownProjectProperties` and throws (with a
   Levenshtein "did you mean" hint) before any task runs. Gradle silently accepts any `-P<name>`,

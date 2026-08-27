@@ -120,6 +120,10 @@ An allowlist entry suppresses a finding permanently, so it must stay auditable:
 - **`1`** - At least one `ERROR`- or `HIDDEN`-level match found.
 - **`2`** - Setup failure: the check never ran (missing/blank scan root, scan root is not a directory, allowlist file not found, no KGP jars provided, or the jars yielded an empty index). Distinct from `1` so CI can tell a broken invocation from real violations.
 
+Gradle collapses any non-zero exit into its own generic failure, so `checkKgpDeprecations` inspects the code itself and fails with a distinguishable message:
+- `1` → `KGP deprecation check FAILED: deprecated API usages found.`
+- `2` → `KGP deprecation check DID NOT RUN (setup failure, exit 2).`
+
 ---
 
 ## Scope & Limits
