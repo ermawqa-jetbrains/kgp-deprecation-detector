@@ -1,40 +1,31 @@
 package org.jetbrains.kotlin.deprecations
 
 /**
- * Name-based heuristic matcher for embedded Gradle scripts (Groovy or Kotlin DSL, hardcoded as
- * string literals)
+ * Matches deprecated symbols in embedded Gradle scripts.
  */
 class EmbeddedScriptScanner(index: List<DeprecatedSymbol>) {
 
-    // one whole-word pattern per searchable term. Terms shorter than 4 chars and the
-    // JVM ctor/clinit names are dropped to keep generic-name noise down
+    // Drops short terms (< 4 chars) and ctors to reduce noise
     private val searchIndex: List<Pair<Regex, DeprecatedSymbol>> = index
         .flatMap { symbol -> setOfNotNull(symbol.searchName, symbol.memberName).map { it to symbol } }
         .filter { (term, _) -> term.isNotBlank() && term != "<init>" && term != "<clinit>" && term.length >= 4 }
         .map { (term, symbol) -> Regex("\\b${Regex.escape(term)}\\b") to symbol }
 
     /**
-     * Scan one embedded script [text]. [lineOffset]/[colOffset] are the 1-based position of the
-     * text's first character in [file] - an embedded script passes the host literal's start
-     * position so reported locations point into the `.kt`/`.java`.
+     * Scans [text] and maps hits to the host [file] position.
      */
     fun scanText(text: String, file: String, lineOffset: Int, colOffset: Int): List<Finding> {
         val masked = maskCommentsAndStrings(text).lines()
         val findings = mutableListOf<Finding>()
-        // (absoluteLine, absoluteColumn, qualifiedName): every distinct occurrence is reported,
-        // so a line using a deprecated API twice yields two hits with two accurate carets. The
-        // key still collapses index entries that resolve to the same qualified name.
         val seen = mutableSetOf<Triple<Int, Int, String>>()
 
         masked.forEachIndexed { idx, maskedLine ->
-            val contentLine = idx + 1 // 1-based within text
+            val contentLine = idx + 1
             val absoluteLine = lineOffset + contentLine - 1
             for ((pattern, symbol) in searchIndex) {
                 for (match in pattern.findAll(maskedLine)) {
-                    val matchCol = match.range.first + 1 // 1-based within content line
-                    // Only line 1 needs the literal's start column: from line 2 on, the raw
-                    // triple-quoted content carries the host file's own indentation, so the
-                    // in-content column already is the host column.
+                    val matchCol = match.range.first + 1
+                    // Only the first line needs colOffset; subsequent lines carry host indentation.
                     val absoluteCol = if (contentLine == 1) colOffset + matchCol - 1 else matchCol
                     if (!seen.add(Triple(absoluteLine, absoluteCol, symbol.qualifiedName))) continue
                     findings += Finding(
@@ -53,11 +44,8 @@ class EmbeddedScriptScanner(index: List<DeprecatedSymbol>) {
 }
 
 /**
- * Replace comments and string/char literals with spaces while preserving line structure
- * (newlines kept; line/column offsets unchanged). Handles Kotlin and Groovy syntax: `//`
- * line comments, `/* */` block comments, `"…"`, `"""…"""`, `'…'`, `'''…'''`.
- * Limitation: string-template `${…}` contents are masked along with the surrounding string; nested
- * block comments are not supported.
+ * Replaces comments and strings with spaces to avoid false positives
+ * while preserving line/column structure.
  */
 internal fun maskCommentsAndStrings(src: String): String {
     val out = StringBuilder(src.length)

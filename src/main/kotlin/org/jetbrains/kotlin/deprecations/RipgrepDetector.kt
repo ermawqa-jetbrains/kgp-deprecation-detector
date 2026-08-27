@@ -14,7 +14,7 @@ internal object RipgrepDetector {
         }
     }
 
-    // for testing purposes
+    // For tests
     internal fun reset() {
         warningPrinted.set(false)
     }

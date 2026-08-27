@@ -70,8 +70,7 @@ class EmbeddedScriptExtractorTest {
 
     @Test
     fun skipsDisallowedLanguageEvenWhenTripleQuoteIsOnItsOwnLine() {
-        // Real JewelReadme.kt shape: annotation, then the declaration line, then `"""` alone
-        // on the next line — two lines separate the annotation from the opening quote.
+        // Handles @Language annotation when separated by several lines.
         val text = """
             @Language("Markdown")
             internal val readme: String =
@@ -86,8 +85,7 @@ class EmbeddedScriptExtractorTest {
 
     @Test
     fun skipsLiteralTaggedWithADisallowedLanguage() {
-        // Regression: a @Language("Markdown") README-as-a-string that happens to show a
-        // `plugins { }` code sample must not be treated as a real embedded script.
+        // Markdown snippets in READMEs must not be extracted.
         val text = """
             @Language("Markdown")
             internal val readme = ${'"'}""
@@ -101,7 +99,7 @@ class EmbeddedScriptExtractorTest {
 
     @Test
     fun keepsLiteralTaggedGroovyEvenAsACommentAnnotation() {
-        // Real IntelliJ pattern: `// @Language("Groovy")` (comment form, used on a local val).
+        // Supports // @Language("Groovy") comment form.
         val text = """
             // @formatter:off
             // @Language("Groovy")
@@ -128,7 +126,7 @@ class EmbeddedScriptExtractorTest {
 
     @Test
     fun untaggedLiteralStillUsesTheMarkerFallback() {
-        // No @Language annotation at all: falls back to the existing marker-based check.
+        // Untagged literals fall back to marker check.
         val text = "val init = \"\"\"\n  allprojects { afterEvaluate { } }\n\"\"\"\n"
         val scripts = extract(text)
         assertEquals(1, scripts.size)

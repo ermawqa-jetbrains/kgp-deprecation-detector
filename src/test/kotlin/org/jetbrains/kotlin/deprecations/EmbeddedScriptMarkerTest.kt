@@ -4,13 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Pins that [EmbeddedScriptFinder] and [EmbeddedScriptExtractor] share a single marker pattern
- * instead of two hand-copied string literals kept in sync manually - a finder marker narrower
- * than the extractor's would silently lose candidates, and nothing used to test the two stayed
- * equal. [EmbeddedScriptExtractor] now builds its `Regex` directly from
- * [EmbeddedScriptFinder.MARKER], so drift is impossible by construction; this test guards
- * end-to-end behavior against a future edit reintroducing a second copy that could go out of
- * sync.
+ * Ensures finder and extractor use the same marker patterns to avoid losing candidates.
  */
 class EmbeddedScriptMarkerTest {
 

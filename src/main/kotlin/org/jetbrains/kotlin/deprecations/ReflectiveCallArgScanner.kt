@@ -1,8 +1,7 @@
 package org.jetbrains.kotlin.deprecations
 
 /**
- * Matches reflective-call target names (from [ReflectiveCallArgExtractor]) against the
- * deprecated-API index by exact JVM member name
+ * Matches reflective call targets against the deprecated API index by JVM member name.
  */
 class ReflectiveCallArgScanner(index: List<DeprecatedSymbol>) {
 
@@ -12,8 +11,6 @@ class ReflectiveCallArgScanner(index: List<DeprecatedSymbol>) {
 
     fun scan(args: List<ReflectiveCallArg>, file: String): List<Finding> {
         val findings = mutableListOf<Finding>()
-        // (line, column, qualifiedName) - two reflective calls to the same member on one line are
-        // two usages and each gets its own caret.
         val seen = mutableSetOf<Triple<Int, Int, String>>()
         for (arg in args) {
             for (symbol in byMemberName[arg.name].orEmpty()) {

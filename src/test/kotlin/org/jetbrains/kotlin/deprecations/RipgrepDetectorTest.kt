@@ -25,8 +25,6 @@ class RipgrepDetectorTest {
         val output = out.toString().trim()
         val lines = output.lines().filter { it.isNotBlank() }
         assertEquals(1, lines.size)
-        // The message must explain itself: it is the one line a first-time user is most likely
-        // to see, and it must not suggest the results differ without rg.
         assertTrue(lines.single().contains("ripgrep"), lines.single())
         assertTrue(lines.single().contains("same"), lines.single())
     }

@@ -3,17 +3,9 @@ package org.jetbrains.kotlin.deprecations
 import java.io.File
 
 /**
- * Shared candidate-file search used by both passes: a ripgrep fast path with an in-process walk
- * fallback, over `.kt`/`.java` files matching a per-pass marker.
- *
- * **The two paths must agree.** Whether `rg` happens to be installed may change how long a scan
- * takes, never which files it reports - otherwise CI and local runs are not comparable. The
- * pinned semantic is "scan everything under the root except `.git`":
- * - `--no-ignore` - a monorepo's `.gitignore` can hide generated-but-shipped sources; path
- *   filtering is `excludePatterns`' job, not the VCS's.
- * - `--hidden` - the walk fallback has no notion of hidden files, so `rg` must not either.
- * - `-g !.git/` / the `.git` skip below - `--hidden --no-ignore` would otherwise drag `rg`
- *   through the object store, which the walk never enters either.
+ * Scans for files containing a marker using ripgrep or an in-process walk.
+ * Both paths must produce identical results. Scans all .kt/.java files
+ * under root except .git, ignoring .gitignore and hidden file status.
  */
 internal object SourceFileFinder {
 
@@ -37,7 +29,7 @@ internal object SourceFileFinder {
         else results.filter { f -> excludePatterns.none { pat -> f.path.contains(pat) } }
     }
 
-    /** returns matched files, or null if `rg` could not be run (falls back to a walk) */
+    /** Returns matched files, or null to trigger a walk fallback. */
     internal fun ripgrepCandidates(root: File, marker: String, fixedString: Boolean): List<File>? = try {
         val proc = ProcessBuilder(
             "rg", "-l", "-0", "--no-messages",
@@ -49,12 +41,9 @@ internal object SourceFileFinder {
         ).redirectErrorStream(true).start()
         val bytes = proc.inputStream.readBytes()
         val code = proc.waitFor()
-        // rg exit codes: 0 = matches, 1 = no matches, >=2 = error (fall back to a walk)
         if (code >= 2) null
         else String(bytes, Charsets.UTF_8).split('\u0000').filter { it.isNotBlank() }.map(::File)
     } catch (_: Exception) {
-        // IOException when `rg` is absent, but a SecurityException or an interrupted `waitFor`
-        // must degrade to the walk too rather than killing the whole run.
         RipgrepDetector.reportMissing()
         null
     }

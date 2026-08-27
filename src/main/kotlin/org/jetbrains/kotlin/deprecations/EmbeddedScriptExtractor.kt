@@ -9,22 +9,13 @@ data class EmbeddedScript(
 )
 
 /**
- * Pulls Gradle script fragments out of `.kt`/`.java` source
+ * Extracts multiline triple-quoted Gradle script fragments from .kt/.java files.
  *
- * v1 handles multiline triple-quoted literals only (Gradle scripts are always multiline);
- * single-line scripts are out of scope.
- *
- * A literal is only returned if it looks like a Gradle script (per [SCRIPT_MARKER]) - but if the
- * literal is preceded by an `@Language("…")` annotation (a real Kotlin annotation, or the `//
- * @Language("…")` comment form used on locals), that tag is authoritative and skipped only when
- * it names a language that isn't Gradle-ish (see [ALLOWED_LANGUAGES]): this is what keeps e.g. a
- * `@Language("Markdown")` README-as-a-string from being scanned just because its documentation
- * happens to show a `plugins { }` code sample.
+ * A literal is skipped if it has an @Language tag that isn't 'groovy' or 'kotlin'.
+ * This prevents scanning documentation snippets.
  */
 object EmbeddedScriptExtractor {
 
-    // Single source of truth: EmbeddedScriptFinder.MARKER (same pattern, used to pre-filter
-    // candidate files); kept here as one Regex so the two can never drift apart.
     private val SCRIPT_MARKER = Regex(EmbeddedScriptFinder.MARKER)
     private val LANGUAGE_ANNOTATION = Regex("""@Language\(\s*"([^"]+)"\s*\)""")
     private val ALLOWED_LANGUAGES = setOf("groovy", "kotlin")
@@ -48,14 +39,14 @@ object EmbeddedScriptExtractor {
         while (i < n) {
             if (isTripleQuoteAt(i)) {
                 val quoteStart = i
-                repeat(3) { advance() } // skip opening """
+                repeat(3) { advance() }
                 val contentStartLine = line
                 val contentStartCol = col
                 val sb = StringBuilder()
                 while (i < n && !isTripleQuoteAt(i)) {
                     sb.append(text[i]); advance()
                 }
-                if (i < n) repeat(3) { advance() } // skip closing """
+                if (i < n) repeat(3) { advance() }
                 val content = sb.toString()
                 val language = languageAnnotationBefore(text, quoteStart)
                 val languageAllowed = language == null || language.lowercase() in ALLOWED_LANGUAGES
@@ -69,10 +60,7 @@ object EmbeddedScriptExtractor {
         return result
     }
 
-    // how many lines above the opening """ to look for an @Language tag. The declaration can
-    // split across lines (annotation, then `internal val X: String =`, then `"""` on its own
-    // line), so 1 line isn't enough; a small bounded window avoids picking up an unrelated
-    // annotation from a declaration further above.
+    // Scans up to 3 lines back for @Language tags. Handles wrapped declarations.
     private const val LANGUAGE_LOOKBACK_LINES = 3
 
     /** The `@Language("X")` tag within [LANGUAGE_LOOKBACK_LINES] lines before [quoteStart]. */

@@ -53,8 +53,7 @@ class ReflectiveCallArgScannerTest {
 
     @Test
     fun reportsEveryCallSiteOnTheSameLineSeparately() {
-        // Two reflective calls to the same member on one line are two usages: reporting only the
-        // first undercounts the hit and points the caret at the wrong column for the second.
+        // Two reflective calls to the same member on one line are two usages.
         val scanner = ReflectiveCallArgScanner(listOf(symbol("getTarget")))
         val findings = scanner.scan(
             listOf(

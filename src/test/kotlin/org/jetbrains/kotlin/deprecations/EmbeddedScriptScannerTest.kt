@@ -6,7 +6,7 @@ import kotlin.test.assertTrue
 
 class EmbeddedScriptScannerTest {
 
-    // Index with a single deprecated property: KotlinCompilation.defaultSourceSetName (ERROR).
+    // Index with one deprecated property for testing.
     private val index = listOf(
         DeprecatedSymbol(
             className = "org.jetbrains.kotlin.gradle.plugin.KotlinCompilation",
@@ -62,8 +62,7 @@ class EmbeddedScriptScannerTest {
 
     @Test
     fun reportsEveryOccurrenceOnTheSameLine() {
-        // Two usages on one line are two hits: reporting only the first undercounts `Hits` and
-        // leaves the caret pointing at the wrong column for the second.
+        // Two usages on one line should yield two findings.
         val text = "allprojects {\n  x(compilation.defaultSourceSetName, other.defaultSourceSetName)\n}\n"
         val findings = scanner.scanText(text, "init.gradle", 1, 1)
         assertEquals(2, findings.size)
@@ -74,8 +73,8 @@ class EmbeddedScriptScannerTest {
 
     @Test
     fun columnOnLinesAfterTheFirstIsAlreadyAbsolute() {
-        // A raw triple-quoted literal keeps the host file's indentation in its own content, so
-        // from line 2 on the in-content column IS the host column - only line 1 needs colOffset.
+        // Only the first line needs column offsetting. Subsequent lines
+        // carry host indentation.
         val text = "allprojects {\n    compilation.defaultSourceSetName\n}\n"
         val f = scanner.scanText(text, "Provider.kt", 10, 30).single()
         assertEquals(11, f.line)

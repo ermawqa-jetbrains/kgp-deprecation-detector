@@ -37,8 +37,7 @@ class SourceFileFinderTest {
 
     @Test
     fun bothPathsFindTheSameFiles() {
-        // The whole point of the shared finder: whether `rg` happens to be installed may change
-        // how long the scan takes, never which files it reports.
+        // ripgrep and walk paths must return the same files.
         write("src/Plain.kt")
         write("src/Plain.java")
         write("src/NoMarker.kt", "val x = 1\n")
@@ -62,8 +61,7 @@ class SourceFileFinderTest {
 
     @Test
     fun gitignoredSourcesAreScanned() {
-        // `--no-ignore`: a monorepo's .gitignore can hide generated-but-shipped sources; what to
-        // skip is `excludePatterns`' decision, not the VCS's.
+        // .gitignore is ignored to ensure consistency.
         write(".gitignore", "generated/\n")
         write("generated/Generated.kt")
         assertEquals(setOf("generated/Generated.kt"), walk())
@@ -93,7 +91,6 @@ class SourceFileFinderTest {
     fun ripgrepIsUsedWhenAvailableAndIsNotRequired() {
         write("src/Real.kt")
         val rg = ripgrep()
-        // Nothing to assert when rg is absent - the other tests already pin the fallback.
         if (rg != null) assertTrue(rg.contains("src/Real.kt"))
     }
 }

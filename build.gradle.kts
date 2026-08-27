@@ -10,17 +10,13 @@ repositories {
 }
 
 kotlin {
-    // Pinned, not "whatever JDK is on PATH": the tool reads bytecode with ASM and its behavior
-    // surface (and the bytecode it compiles to) must not differ between a developer's local JDK
-    // and CI. 17 is the lowest LTS this build needs.
+    // Pins toolchain to ensure consistent bytecode across environments.
     jvmToolchain(17)
 }
 
 /**
- * Project properties this build understands. Gradle silently accepts any `-P<name>=<value>`,
- * so a typo (`-PmnorepoDir=...`) would fall back to the default scan root and produce a green
- * build against the bundled fixture - the same silent-success failure mode the tool's exit
- * code 2 exists to prevent. Fail the build instead.
+ * Validates -P properties to prevent typos.
+ * Gradle silently ignores unknown ones.
  */
 val knownProjectProperties = setOf(
     "monorepoDir",
@@ -33,8 +29,7 @@ val knownProjectProperties = setOf(
 )
 
 run {
-    // Only command-line `-P` properties are validated; namespaced ones (org.gradle.*, kotlin.*,
-    // systemProp.*) belong to Gradle/plugins and are left alone.
+    // Only validate command-line -P properties (skip namespaced ones).
     val unknown = gradle.startParameter.projectProperties.keys
         .filter { "." !in it && it !in knownProjectProperties }
     if (unknown.isNotEmpty()) {
@@ -50,7 +45,7 @@ run {
     }
 }
 
-/** Plain Levenshtein distance, used only to suggest the closest known property name. */
+/** Levenshtein distance for property name suggestions. */
 fun levenshtein(a: String, b: String): Int {
     var previous = IntArray(b.length + 1) { it }
     for (i in 1..a.length) {
@@ -65,18 +60,17 @@ fun levenshtein(a: String, b: String): Int {
     return previous[b.length]
 }
 
-// KGP version whose @Deprecated API set is indexed for name-matching
-// override with -PkgpEngineVersion=<ver> to match the target monorepo's KGP version
+// KGP version to index. Override with -PkgpEngineVersion.
 val engineVersion = (findProperty("kgpEngineVersion") as String?) ?: "2.4.10"
 
 dependencies {
-    // ASM: reads @Deprecated members out of the KGP jars (no class loading) to build the name index
+    // ASM: reads @Deprecated members from jars without class loading
     implementation("org.ow2.asm:asm:9.10.1")
 
     testImplementation(kotlin("test"))
 }
 
-// KGP jars for the indexed engine version
+// KGP jars for the indexed version
 val kgpJars = configurations.create("kgpJars")
 dependencies {
     kgpJars("org.jetbrains.kotlin:kotlin-gradle-plugin:$engineVersion")
@@ -84,10 +78,7 @@ dependencies {
 
 
 /**
- * Scan root, resolved against the project directory at **configuration** time. A raw relative
- * string used to reach the JVM untouched, so a mistyped absolute path (the truncated
- * `/Useyermukhamed.shakhman/...` incident) was only caught after startup - and a path that
- * happens to exist relative to the daemon's working directory would be scanned silently.
+ * Resolves scan root at configuration time to catch invalid paths early.
  */
 fun resolveScanRoot(): File {
     val raw = findProperty("monorepoDir")?.toString()?.takeIf { it.isNotBlank() } ?: "test-monorepo"
@@ -102,39 +93,31 @@ fun resolveScanRoot(): File {
     return resolved.canonicalFile
 }
 
-/** Main task that checks for deprecation **/
+/** Main verification task **/
 tasks.register<JavaExec>("checkKgpDeprecations") {
     group = "verification"
-    description = "Scans .kt/.java under -PmonorepoDir (default test-monorepo) for embedded " +
-        "Gradle scripts using deprecated KGP APIs. Optional -Pallowlist=<file>."
+    description = "Scans .kt/.java for embedded Gradle scripts using deprecated KGP APIs."
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass.set("org.jetbrains.kotlin.deprecations.MainKt")
-    // Surface the indexed KGP version in the tool's banner
+    // Surface indexed KGP version in banner
     systemProperty("kgp.engineVersion", engineVersion)
-    // `asPath` instead of a manual joinToString; resolution happens here, which is lazy because
-    // `tasks.register`'s configuration block only runs when the task is in the graph (so
-    // `./gradlew help` never resolves it). It cannot be a Provider: JavaExec.systemProperty does
-    // not unwrap one and would pass the provider's toString() as the classpath.
+    // Lazy resolution of KGP jars. Must not be a Provider for systemProperty compatibility.
     systemProperty("kgp.pluginJars", kgpJars.asPath)
-    // A checker must always run; say so deliberately rather than by declaring no inputs/outputs.
+    // Verification must always run
     outputs.upToDateWhen { false }
     findProperty("excludePatterns")?.toString()?.takeIf { it.isNotBlank() }
         ?.let { systemProperty("kgp.excludePatterns", it) }
-    // -PfullIndex (value optional; `-PfullIndex` alone means true) keeps the internal/utils/impl/
-    // Android classes in the deprecation index instead of filtering them out
+    // -PfullIndex includes internal/Android packages
     findProperty("fullIndex")?.let {
         systemProperty("kgp.fullIndex", it.toString().takeIf { v -> v.isNotBlank() } ?: "true")
     }
 
-    // mirrors terminal output into a report file
-    // override the path with -PreportFile=<path>
+    // Mirror output to file if -PreportFile is set
     val reportFile = findProperty("reportFile")?.toString()?.takeIf { it.isNotBlank() }
         ?: layout.buildDirectory.file("reports/kgp-deprecations.txt").get().asFile.path
     systemProperty("kgp.reportFile", reportFile)
 
-    // identify monorepo (validated at configuration time, see resolveScanRoot)
     val monorepo = resolveScanRoot().path
-    // identify allowlist
     val allowlistArg = findProperty("allowlist")?.toString().orEmpty()
     args = listOf(monorepo, allowlistArg)
 }

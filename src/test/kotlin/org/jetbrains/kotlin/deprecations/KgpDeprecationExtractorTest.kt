@@ -106,7 +106,7 @@ class KgpDeprecationExtractorTest {
     fun excludes_internal_utils_impl_packages_and_android_classes() {
         val jar = jarOf(
             "foo/Public.class" to classBytes("foo/Public", classAnnotation = DeprecationSpec("ERROR", "x", null)),
-            // Both top-level and nested `internal` packages must be excluded.
+            // Exclude both top-level and nested internal packages.
             "foo/internal/Hidden.class" to classBytes("foo/internal/Hidden", classAnnotation = DeprecationSpec("ERROR", "x", null)),
             "foo/internal/sub/Hidden.class" to classBytes("foo/internal/sub/Hidden", classAnnotation = DeprecationSpec("ERROR", "x", null)),
             "foo/utils/Helper.class" to classBytes("foo/utils/Helper", classAnnotation = DeprecationSpec("ERROR", "x", null)),
@@ -120,9 +120,7 @@ class KgpDeprecationExtractorTest {
 
     @Test
     fun fullIndex_keeps_excluded_packages_and_reports_no_skips() {
-        // The package filter is aggressive (KGP ships public API under `impl`/`utils`, and an
-        // Android-named symbol is what an AGP-injected script would touch), so it must be
-        // opt-out rather than unconditional.
+        // Filter must be opt-out because KGP ships public API in 'impl' or 'utils'.
         val jar = jarOf(
             "foo/Public.class" to classBytes("foo/Public", classAnnotation = DeprecationSpec("ERROR", "x", null)),
             "foo/internal/Hidden.class" to classBytes("foo/internal/Hidden", classAnnotation = DeprecationSpec("ERROR", "x", null)),
@@ -140,7 +138,7 @@ class KgpDeprecationExtractorTest {
 
     @Test
     fun reports_how_many_classes_the_package_filter_dropped() {
-        // A filter that silently shrinks the search space looks exactly like a clean jar.
+        // Filtered classes must be reported to avoid silent partial runs.
         val jar = jarOf(
             "foo/Public.class" to classBytes("foo/Public", classAnnotation = DeprecationSpec("ERROR", "x", null)),
             "foo/internal/Hidden.class" to classBytes("foo/internal/Hidden", classAnnotation = DeprecationSpec("ERROR", "x", null)),
@@ -154,7 +152,7 @@ class KgpDeprecationExtractorTest {
 
     @Test
     fun defaults_to_WARNING_when_level_attribute_missing() {
-        // Build a class whose @Deprecated annotation lacks the `level` attribute.
+        // Default to WARNING if level is missing.
         val cw = ClassWriter(0)
         cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "foo/NoLevel", null, "java/lang/Object", null)
         val av = cw.visitAnnotation("Lkotlin/Deprecated;", true)
@@ -170,9 +168,7 @@ class KgpDeprecationExtractorTest {
 
     @Test
     fun strips_dollar_annotations_suffix_from_kotlin_property_synthetic_method() {
-        // Kotlin emits property-level @Deprecated on a synthetic `<name>$annotations`
-        // method, not on the real getter. The extractor must record the canonical
-        // accessor name so the symbol's searchName aligns with call sites in user code.
+        // Kotlin property annotations are on synthetic <name>$annotations method.
         val jar = jarOf(
             "foo/PropHolder.class" to classBytes(
                 internalName = "foo/PropHolder",

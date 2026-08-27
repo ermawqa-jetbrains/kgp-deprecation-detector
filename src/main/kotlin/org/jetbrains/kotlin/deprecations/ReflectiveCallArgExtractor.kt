@@ -6,37 +6,20 @@ import java.io.File
 data class ReflectiveCallArg(val name: String, val line: Int, val column: Int)
 
 /**
- * Pulls reflective-call target names out of `.kt`/`.java` source,
- * e.g. `instance.callReflectiveGetter("getCompilation", logger)`
+ * Extracts reflective call target names (literals or local constants) from .kt/.java source.
+ * Example: `instance.callReflectiveGetter("getCompilation", logger)`
  *
- * Matching runs over the **whole** masked text rather than line by line: these helpers take 2-3
- * extra arguments, so the formatter routinely wraps the call and puts the literal on the line
- * after `callReflective…(`. Splitting into lines first made every such call invisible - a
- * false-negative class in exactly the `gradleTooling/reflect` sources this pass targets.
- *
- * A target passed as a constant declared **in the same file** is resolved too (`private const val
- * GETTER = "getX"` / `callReflectiveGetter(GETTER, logger)`), by collecting the file's own
- * string-valued `val`/`static final String` declarations into a local map. The reported position
- * stays on the call site, not on the declaration, so the caret lands where the reader must act.
- *
- * Known limitations: a constant declared in **another** file is not resolved (matching on the
- * simple name across files would produce wrong values for same-named constants), and a name built
- * by concatenation or interpolation is undecidable statically - both would need the very
- * compilation this pass exists to work without.
+ * Scans the whole file at once to handle calls where the literal wraps to the next line.
+ * Resolves string constants declared in the same file, but not those in other files
+ * or computed at runtime.
  */
 object ReflectiveCallArgExtractor {
 
-    // `\s*` spans newlines, so the literal may sit on a later line than the call itself. The
-    // trailing `[,)]` requires the literal to BE the whole argument: in `callReflectiveGetter(
-    // "get" + name, …)` the name is computed, and reporting the fragment `get` would be a wrong
-    // hit rather than a missing one.
+    // Matches literals. Spans newlines. Requires the literal to be the whole
+    // argument to avoid partial matches like "get" in "get" + name.
     private val CALL_SITE = Regex("""\bcallReflective\w*\s*\(\s*"([A-Za-z_][A-Za-z0-9_]*)"\s*[,)]""")
 
-    /**
-     * The same call shape, but with an identifier (optionally qualified, e.g. `Companion.GETTER`)
-     * instead of a literal. Only resolved against [stringConstants] of the same file; an unknown
-     * name yields nothing, so the pass fails closed rather than guessing.
-     */
+    /** Matches identifiers resolved against same-file string constants. */
     private val CALL_SITE_IDENT =
         Regex("""\bcallReflective\w*\s*\(\s*((?:[A-Za-z_][A-Za-z0-9_]*\.)*[A-Za-z_][A-Za-z0-9_]*)\s*[,)]""")
 
@@ -65,10 +48,7 @@ object ReflectiveCallArgExtractor {
             .toList()
     }
 
-    /**
-     * String constants declared in this file, keyed by simple name. A name declared twice with
-     * different values is dropped: picking either one would be a guess.
-     */
+    /** Resolves local string constants. Ignores ambiguous names (declared twice). */
     private fun stringConstants(masked: String): Map<String, String> {
         val found = mutableMapOf<String, String?>()
         for (regex in listOf(KOTLIN_STRING_CONST, JAVA_STRING_CONST)) {
@@ -94,9 +74,8 @@ object ReflectiveCallArgExtractor {
 }
 
 /**
- * Replace `//` and `/* */` comments with spaces while preserving line structure and string/char
- * literal content verbatim - unlike [maskCommentsAndStrings], strings must survive here since the
- * reflective-call target name [ReflectiveCallArgExtractor] looks for IS a string literal.
+ * Replaces comments with spaces while keeping string content intact.
+ * Strings must survive as they are the targets for reflective call extraction.
  */
 internal fun maskComments(src: String): String {
     val out = StringBuilder(src.length)

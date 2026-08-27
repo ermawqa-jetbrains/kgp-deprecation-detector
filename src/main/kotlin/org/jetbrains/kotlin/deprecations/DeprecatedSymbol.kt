@@ -1,10 +1,7 @@
 package org.jetbrains.kotlin.deprecations
 
 /**
- * A `@Deprecated` declaration read out of a KGP jar by [KgpDeprecationExtractor].
- *
- * This is the deprecated-API *index* [EmbeddedScriptScanner] matches against - it does
- * not represent a usage (that is [Finding]). [DeprecationLevel] is declared in `Finding.kt`.
+ * A @Deprecated declaration indexed from a KGP jar.
  */
 data class DeprecatedSymbol(
     val className: String,
@@ -17,7 +14,7 @@ data class DeprecatedSymbol(
     val qualifiedName: String
         get() = if (memberName != null) "$className.$memberName" else className
 
-    /** Kotlin property access name derived from a JVM getter/setter (`getFoo` -> `foo`) */
+    /** Kotlin property name derived from JVM getter/setter (e.g., 'getFoo' -> 'foo'). */
     val searchName: String
         get() {
             val name = memberName ?: return className.substringAfterLast('.')

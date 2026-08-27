@@ -14,9 +14,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 /**
- * Pins the exit-code contract: 0 = clean, [EXIT_FINDINGS] = blocking usages,
- * [EXIT_SETUP_FAILURE] = the check never ran. A setup failure must never look like success -
- * a mistyped scan root used to produce a green build with zero findings.
+ * Pins the exit-code contract: 0 (clean), 1 (findings), 2 (setup failure).
  */
 class MainExitCodeTest {
 
@@ -113,7 +111,7 @@ class MainExitCodeTest {
 
     @Test
     fun wrapped_reflective_call_is_found_end_to_end() {
-        // The call is formatted across lines, so the literal sits below `callReflectiveGetter(`.
+        // Call wraps across lines.
         System.setProperty("kgp.pluginJars", jarWithDeprecation().absolutePath)
         val root = File(tmp, "reflect/src").apply { mkdirs() }
         File(root, "Reflection.kt").writeText(
@@ -153,7 +151,7 @@ class MainExitCodeTest {
 
     // --- helpers ---
 
-    /** Runs [run] with stdout/stderr captured; returns the exit code and the captured stderr. */
+    /** Runs [run] and captures output for assertions. */
     private fun runSilently(args: Array<String>): Pair<Int, String> {
         val err = ByteArrayOutputStream()
         val originalOut = System.out
@@ -168,7 +166,7 @@ class MainExitCodeTest {
         }
     }
 
-    /** A scan root holding one embedded Groovy script that uses the deprecated member. */
+    /** A scan root holding one embedded script that uses the deprecated member. */
     private fun rootWithDeprecatedUsage(): File {
         val root = File(tmp, "monorepo/src").apply { mkdirs() }
         File(root, "InitScript.kt").writeText(

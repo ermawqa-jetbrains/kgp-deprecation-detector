@@ -48,17 +48,14 @@ class ReflectiveCallArgExtractorTest {
 
     @Test
     fun ignoresIdentifierThatMerelyContainsCallReflectiveAsASubstring() {
-        // `\b` requires a boundary before "callReflective" - a prefixed identifier like this
-        // must not match just because it contains the marker text.
+        // Must have boundary before callReflective.
         val text = """xcallReflectiveGetter("getTarget", logger)"""
         assertEquals(emptyList(), extract(text))
     }
 
     @Test
     fun extractsTargetNameWhenTheCallIsWrappedOverSeveralLines() {
-        // The formatter routinely wraps these calls, putting the literal on the next line. A
-        // line-by-line scan missed every such call site - a false-negative class in the very
-        // `gradleTooling/reflect/*.kt` files this pass targets.
+        // Handles calls wrapped over several lines.
         val text = """
             val x = instance.callReflectiveGetter(
                 "getDefaultSourceSetName",
@@ -94,7 +91,7 @@ class ReflectiveCallArgExtractorTest {
         """.trimIndent()
         val arg = extract(text).single()
         assertEquals("getDefaultSourceSetName", arg.name)
-        // The position stays on the call site, not on the declaration.
+        // Position stays on call site, not declaration.
         assertEquals(3, arg.line)
         assertEquals(57, arg.column)
     }
@@ -128,14 +125,14 @@ class ReflectiveCallArgExtractorTest {
 
     @Test
     fun ignoresIdentifierArgumentThatIsNotAKnownConstant() {
-        // Fails closed: an unresolvable name yields nothing rather than a guessed hit.
+        // Unresolvable names yield nothing.
         val text = """instance.callReflectiveGetter(someName, logger)"""
         assertEquals(emptyList(), extract(text))
     }
 
     @Test
     fun ignoresConstantDeclaredTwiceWithDifferentValues() {
-        // Two same-named constants in one file make the value ambiguous; picking one is a guess.
+        // Ambiguous constants yield nothing.
         val text = """
             object A { const val GETTER = "getOne" }
             object B { const val GETTER = "getTwo" }

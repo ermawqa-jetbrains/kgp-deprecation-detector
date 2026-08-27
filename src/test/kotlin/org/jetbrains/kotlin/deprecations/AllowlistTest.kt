@@ -7,10 +7,8 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * The allowlist is the tool's only mechanism for suppressing findings, so an unexplained or
- * stale entry silences a real violation with no trace. These tests pin the two properties that
- * make it auditable: every entry carries a reason, and the file records the KGP index version it
- * was curated against (a bump can turn a false positive into a genuine hit).
+ * Ensures the allowlist is auditable: every entry must have a reason
+ * and a declared KGP version.
  */
 class AllowlistTest {
 

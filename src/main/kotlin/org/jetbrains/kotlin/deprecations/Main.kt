@@ -7,70 +7,58 @@ import java.io.PrintStream
 import kotlin.system.exitProcess
 
 /**
- * Scans a monorepo for two kinds of blind spot the compiler can't see through, both matched
- * against the same `@Deprecated` KGP name index read from the KGP jars:
- *  - **Embedded Gradle scripts** - Groovy or Kotlin-DSL scripts hardcoded as string literals
- *    inside `.kt`/`.java` (IDE-injected init/build scripts). Motivation: KT-85590
- *  - **Reflective calls** - a member name passed as a string literal to a `callReflective*`
- *    helper (cross-KGP-version compat dispatch), resolved only at runtime.
+ * Scans for KGP API usages the compiler misses:
+ *  - Embedded Gradle scripts (Groovy/Kotlin-DSL in strings)
+ *  - Reflective calls (member name passed as string)
  *
- * Exit 1 if any `ERROR`- or `HIDDEN`-level match is found, 2 if the tool could not run at all
- * (bad arguments, missing allowlist, unusable KGP jars), else 0.
+ * Exit codes: 0 (clean), 1 (findings), 2 (setup failure).
  */
 fun main(args: Array<String>) {
     exitProcess(run(args))
 }
 
-/** Exit code meaning "the check ran and found blocking usages". */
 internal const val EXIT_FINDINGS = 1
 
 /**
- * Exit code meaning "the check never ran" - a setup failure. Deliberately distinct from
- * [EXIT_FINDINGS] so CI can tell a broken invocation from real violations; a silent success
- * on a mistyped path would hide exactly the signal this tool exists to restore.
+ * Setup failure. Distinct from [EXIT_FINDINGS] so CI can tell
+ * a broken run from real violations.
  */
 internal const val EXIT_SETUP_FAILURE = 2
 
 internal fun run(args: Array<String>): Int {
-    // create report file. Mirrors everything printed to stdout/stderr into `-PreportFile`
+    // Mirror output to file if -PreportFile is set
     val reportFilePath = setUpReportFileTee()
 
-    // make sure agrs not empty
     if (args.isEmpty() || args[0].isBlank()) {
         printHelpUsage()
         return EXIT_SETUP_FAILURE
     }
 
-    // make sure root is directory
     val scanRoot = File(args[0]).canonicalFile
     if (!scanRoot.isDirectory) {
         System.err.println("Not a directory: ${scanRoot.path}")
         return EXIT_SETUP_FAILURE
     }
 
-    // get allowlist
     val allowlistPath = args.getOrNull(1)?.takeIf { it.isNotBlank() }
     val allowlistFile = allowlistPath?.let(::File)
     val allowlist = if (allowlistFile == null) emptySet() else {
         loadAllowlist(allowlistFile) ?: return EXIT_SETUP_FAILURE
     }
 
-    // exclude test fixtures + known non-script false positives;
-    // -PexcludePatterns adds more on top
+    // Default excludes + user patterns
     val defaultExcludes = listOf(
         "/testData/", "/testdata/", "/testResources/", "/testSources/", "/testSrc/",
         "/test/", "/tests/", "/integration-tests/", "/agpIntegrationTestSrc/", "/resources/",
-        // LLM system-prompt content, not a Gradle script (matches markers by coincidence):
+        // Notebook prompt (not a script)
         "/privacy/KotlinNotebookSystemPromptPrivacySafeWrapper.kt",
-        // A `plugins { }` snippet inside an error-message string (documentation example, not
-        // a real script; untagged so the @Language filter can't catch it):
+        // Documentation snippet (not a script)
         "/fleet/buildtool/bundles/helpers.kt",
     )
     val userExcludes = System.getProperty("kgp.excludePatterns").orEmpty()
         .split(',').map { it.trim() }.filter { it.isNotBlank() }
     val excludePatterns = (defaultExcludes + userExcludes).distinct()
 
-    //check availability of JAR for given (or default) version
     val engineVersion = System.getProperty("kgp.engineVersion")?.takeIf { it.isNotBlank() }
     val jars = System.getProperty("kgp.pluginJars").orEmpty()
         .split(File.pathSeparator).filter { it.isNotBlank() }
@@ -78,11 +66,9 @@ internal fun run(args: Array<String>): Int {
         System.err.println("No KGP jars provided (kgp.pluginJars) - nothing to match against.")
         return EXIT_SETUP_FAILURE
     }
-    // `kgp.fullIndex` (-PfullIndex) disables the extractor's internal/utils/impl/Android package
-    // filter: it trades noise for coverage when a hit is expected in one of those packages.
+    // -PfullIndex includes internal/Android packages
     val fullIndex = System.getProperty("kgp.fullIndex").toBoolean()
-    // get list of deprecated APIs from JAR. A jar that fails to open is reported, never swallowed:
-    // a silently partial index looks exactly like a clean run.
+    // Build index. Errors are reported to avoid silent partial runs.
     val jarIndexes = jars.map { jar ->
         runCatching { KgpDeprecationExtractor.extractIndex(jar, fullIndex) }
             .onFailure { System.err.println("Failed to read KGP jar '$jar': $it") }
@@ -95,7 +81,6 @@ internal fun run(args: Array<String>): Int {
         return EXIT_SETUP_FAILURE
     }
 
-    // print key info about the current session at the beginning
     println("KGP DEPRECATION CHECK")
     println("  Scanning : ${scanRoot.path}")
     println("  KGP      : ${engineVersion ?: "(version unknown)"} (${index.size} deprecated symbol(s) indexed)")
@@ -108,27 +93,22 @@ internal fun run(args: Array<String>): Int {
     if (reportFilePath != null) println("  Report   : $reportFilePath")
     println()
 
-    /** SCAN 1: Scan for embedded scripts **/
-    // scan monorepo on candidate files and get list
+    /** SCAN 1: Embedded scripts */
     val scanner = EmbeddedScriptScanner(index)
     val candidates = EmbeddedScriptFinder.candidates(scanRoot, excludePatterns).toList()
-    // extract embedded scripts from candidate files and return a list
     val embeddedFindings = candidates.parallelStream().map { file ->
         EmbeddedScriptExtractor.extract(file).flatMap { s ->
             scanner.scanText(s.text, file.path, s.startLine, s.startColumn)
         }
     }.toList().flatten()
 
-    /** SCAN 2: Scan for reflective calls **/
-    // scan monorepo on candidate files and get list
+    /** SCAN 2: Reflective calls */
     val reflectiveScanner = ReflectiveCallArgScanner(index)
     val reflectiveCandidates = ReflectiveCallFinder.candidates(scanRoot, excludePatterns).toList()
-    //extract reflective calls from candidate files and return a list
     val reflectiveFindings = reflectiveCandidates.parallelStream().map { file ->
         reflectiveScanner.scan(ReflectiveCallArgExtractor.extract(file), file.path)
     }.toList().flatten()
 
-    // merge findings from both scans
     val findings = (embeddedFindings + reflectiveFindings).filterNot { it.symbol in allowlist }
 
     println("Scanned ${candidates.size} embedded-script candidate file(s), ${reflectiveCandidates.size} reflective-call candidate file(s).")
@@ -138,7 +118,7 @@ internal fun run(args: Array<String>): Int {
     val errors = findings.count { it.level == DeprecationLevel.ERROR }
     val hidden = findings.count { it.level == DeprecationLevel.HIDDEN }
 
-    // Gate: WARNING-only (or clean) passes; ERROR or HIDDEN fails the run
+    // WARNING passes; ERROR/HIDDEN fails
     return if (errors > 0 || hidden > 0) {
         System.err.println("Result: FAIL")
         EXIT_FINDINGS
@@ -162,10 +142,8 @@ private fun setUpReportFileTee(): String? {
 }
 
 /**
- * An allowlist entry is a claim that a *specific* KGP version's index produces that particular
- * false positive; a KGP bump can turn the same entry into a silenced real violation. The file
- * declares the version it was curated against as `# kgp-version: <ver>` and a mismatch is
- * reported so the entries get re-reviewed instead of being trusted indefinitely.
+ * Warn if allowlist version differs from indexed KGP version.
+ * Helps prevent stale false-positives after a KGP bump.
  */
 internal fun warnOnAllowlistDrift(file: File, engineVersion: String?) {
     val declared = runCatching {
@@ -218,8 +196,7 @@ private fun report(findings: List<Finding>) {
             println("  Reason: ${usages.first().message}")
             println("  Hits  : ${usages.size}")
             usages.forEach { f ->
-                // absolute path, not relative-to-scanRoot: keeps IDE/terminal file:line:column
-                // click-to-open working regardless of the terminal's own cwd.
+                // Absolute path for IDE click-to-open
                 println("    ${f.file}:${f.line}:${f.column}")
                 sourceLineWithCaret(f)?.forEach { println("      $it") }
             }
@@ -228,14 +205,13 @@ private fun report(findings: List<Finding>) {
     println("------------------------------------------------------------")
 }
 
-// arrow under deprecated API
 private fun sourceLineWithCaret(finding: Finding): List<String>? {
     val line = runCatching { File(finding.file).readLines().getOrNull(finding.line - 1) }.getOrNull() ?: return null
     val caret = " ".repeat((finding.column - 1).coerceAtLeast(0)) + "^"
     return listOf(line, caret)
 }
 
-/** Writes every byte to both [a] and [b]; used to mirror console output into a report file */
+/** Mirrors output to two streams. */
 private class TeeOutputStream(private val a: OutputStream, private val b: OutputStream) : OutputStream() {
     override fun write(byte: Int) {
         a.write(byte)

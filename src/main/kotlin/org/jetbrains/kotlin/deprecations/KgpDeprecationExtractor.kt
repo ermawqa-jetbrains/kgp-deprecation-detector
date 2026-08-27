@@ -9,22 +9,18 @@ import org.objectweb.asm.Opcodes
 import java.util.jar.JarFile
 
 /**
- * Reads every `@Deprecated` (Kotlin) declaration out of a KGP jar via ASM - without
- * loading the classes. Produces the deprecated-API index that [EmbeddedScriptScanner] matches
- * against by name, for embedded Gradle scripts that are never compiled.
+ * Extracts @Deprecated declarations from KGP jars via ASM.
  */
 object KgpDeprecationExtractor {
 
-    /** Index of one jar plus how many classes [isExcluded] kept out of it (0 when `fullIndex`). */
+    /** Index of one jar plus count of classes skipped by the package filter. */
     data class JarIndex(val symbols: List<DeprecatedSymbol>, val skippedClasses: Int)
 
     fun extract(jarPath: String, fullIndex: Boolean = false): List<DeprecatedSymbol> =
         extractIndex(jarPath, fullIndex).symbols
 
     /**
-     * Same as [extract], but also reports how many classes the [isExcluded] package filter
-     * dropped - that filter shrinks the search space silently, so the count is surfaced in the
-     * banner and can be disabled entirely with `fullIndex`.
+     * Extracts index and reports how many classes the package filter dropped.
      */
     fun extractIndex(jarPath: String, fullIndex: Boolean = false): JarIndex {
         val results = mutableListOf<DeprecatedSymbol>()
@@ -73,10 +69,7 @@ private class DeprecationClassVisitor(
     ): MethodVisitor = object : MethodVisitor(Opcodes.ASM9) {
         override fun visitAnnotation(annDescriptor: String, visible: Boolean): AnnotationVisitor? {
             if (annDescriptor == KOTLIN_DEPRECATED_DESC) {
-                // Kotlin emits property-level @Deprecated on a synthetic
-                // `<name>$annotations` method, not on the real getter. Strip
-                // the suffix so the recorded memberName matches the JVM
-                // accessor that user code actually invokes
+                // Kotlin synthetic method for property annotations
                 val canonicalName = name.removeSuffix("\$annotations")
                 return DeprecationAnnotationVisitor { level, message, replaceWith ->
                     onDeprecated(DeprecatedSymbol(className, canonicalName, descriptor, level, message, replaceWith))
@@ -137,10 +130,10 @@ private class DeprecationAnnotationVisitor(
     override fun visitEnd() = onComplete(level, message, replaceWith)
 }
 
-// Сlasses assumed never to be used directly in Gradle build files. Aggressive by nature - KGP
-// ships public API in packages containing `impl`/`utils`, and an `Android*` symbol is exactly
-// what an AGP-injected init script may touch - so it is opt-out via `fullIndex` and the number
-// of classes it drops is reported rather than hidden.
+/**
+ * Filters internal packages. Surfaced and opt-out because KGP sometimes
+ * ships public API in 'impl', 'utils', or 'Android' packages.
+ */
 private fun String.isExcluded(): Boolean {
     val segments = substringBeforeLast('/').split('/')
     val simpleName = substringAfterLast('/').removeSuffix(".class")
