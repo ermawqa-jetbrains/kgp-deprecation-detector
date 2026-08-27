@@ -90,7 +90,8 @@ Unknown `-P` properties fail the build at configuration time (with a "did you me
 Matching is by name, never by resolution - Groovy is dynamically typed, a Kotlin-DSL string literal is compiled by nothing, and a reflective target is known only at runtime. Within that:
 - Reflective call sites are matched over the whole file, so a call wrapped across lines (`callReflectiveGetter(` on one line, the name on the next) is found.
 - Every occurrence is reported separately, each with its own `file:line:column` and caret; identical hits at the same position are collapsed.
-- **Not seen:** a reflective target held in a `const val` or built by concatenation - only inline string literals are visible.
+- A reflective target held in a **string constant declared in the same file** (`const val`/`val`/Java `static final String`, referenced bare or qualified as `Names.GETTER`) is resolved from that file's own declarations; the reported position stays on the call site.
+- **Not seen:** a target constant declared in *another* file (matching on the simple name across files would give wrong values for same-named constants), or a name built by concatenation/interpolation (undecidable without the compiler). An unresolvable identifier yields no hit rather than a guess.
 - **Not seen by default:** deprecations in `internal`/`utils`/`impl` packages and `Android*` classes; the banner prints how many classes were dropped and `-PfullIndex` includes them.
 
 ### Built-in Exclusions

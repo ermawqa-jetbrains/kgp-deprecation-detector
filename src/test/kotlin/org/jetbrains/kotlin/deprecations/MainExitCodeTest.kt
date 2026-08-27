@@ -128,6 +128,20 @@ class MainExitCodeTest {
     }
 
     @Test
+    fun reflective_call_via_same_file_constant_is_found_end_to_end() {
+        System.setProperty("kgp.pluginJars", jarWithDeprecation().absolutePath)
+        val root = File(tmp, "const/src").apply { mkdirs() }
+        File(root, "Reflection.kt").writeText(
+            """
+            private const val GETTER = "getDefaultSourceSetName"
+
+            fun read(instance: Any) = instance.callReflectiveGetter(GETTER, logger)
+            """.trimIndent() + "\n"
+        )
+        assertEquals(EXIT_FINDINGS, runSilently(arrayOf(root.path)).first)
+    }
+
+    @Test
     fun allowlisted_finding_succeeds() {
         System.setProperty("kgp.pluginJars", jarWithDeprecation().absolutePath)
         val allowlist = File(tmp, "allowlist.txt").apply {

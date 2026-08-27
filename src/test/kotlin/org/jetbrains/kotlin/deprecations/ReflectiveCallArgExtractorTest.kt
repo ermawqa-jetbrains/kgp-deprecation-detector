@@ -86,6 +86,71 @@ class ReflectiveCallArgExtractorTest {
     }
 
     @Test
+    fun resolvesTargetHeldInASameFileConstant() {
+        val text = """
+            private const val GETTER = "getDefaultSourceSetName"
+
+            fun read(instance: Any) = instance.callReflectiveGetter(GETTER, logger)
+        """.trimIndent()
+        val arg = extract(text).single()
+        assertEquals("getDefaultSourceSetName", arg.name)
+        // The position stays on the call site, not on the declaration.
+        assertEquals(3, arg.line)
+        assertEquals(57, arg.column)
+    }
+
+    @Test
+    fun resolvesTargetHeldInATypedVal() {
+        val text = """
+            val getter: String = "getTarget"
+            val x = instance.callReflectiveAnyGetter(getter, logger)
+        """.trimIndent()
+        assertEquals(listOf("getTarget"), extract(text).map { it.name })
+    }
+
+    @Test
+    fun resolvesTargetHeldInAJavaStringConstant() {
+        val text = """
+            private static final String GETTER = "getTarget";
+            Object x = instance.callReflectiveGetter(GETTER, logger);
+        """.trimIndent()
+        assertEquals(listOf("getTarget"), extract(text).map { it.name })
+    }
+
+    @Test
+    fun resolvesQualifiedConstantReferenceBySimpleName() {
+        val text = """
+            object Names { const val GETTER = "getTarget" }
+            val x = instance.callReflectiveGetter(Names.GETTER, logger)
+        """.trimIndent()
+        assertEquals(listOf("getTarget"), extract(text).map { it.name })
+    }
+
+    @Test
+    fun ignoresIdentifierArgumentThatIsNotAKnownConstant() {
+        // Fails closed: an unresolvable name yields nothing rather than a guessed hit.
+        val text = """instance.callReflectiveGetter(someName, logger)"""
+        assertEquals(emptyList(), extract(text))
+    }
+
+    @Test
+    fun ignoresConstantDeclaredTwiceWithDifferentValues() {
+        // Two same-named constants in one file make the value ambiguous; picking one is a guess.
+        val text = """
+            object A { const val GETTER = "getOne" }
+            object B { const val GETTER = "getTwo" }
+            val x = instance.callReflectiveGetter(GETTER, logger)
+        """.trimIndent()
+        assertEquals(emptyList(), extract(text))
+    }
+
+    @Test
+    fun ignoresConcatenatedTargetName() {
+        val text = """instance.callReflectiveGetter("get" + name, logger)"""
+        assertEquals(emptyList(), extract(text))
+    }
+
+    @Test
     fun doesNotMatchPlainMethodCallWithoutReflectivePrefix() {
         val text = """instance.getCompilation("getTarget", logger)"""
         assertEquals(emptyList(), extract(text))
