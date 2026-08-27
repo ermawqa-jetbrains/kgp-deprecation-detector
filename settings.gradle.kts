@@ -5,7 +5,7 @@ pluginManagement {
         maven("https://packages.jetbrains.team/maven/p/kt/dev")
     }
     plugins {
-        kotlin("jvm") version "2.4.0"
+        kotlin("jvm") version "2.4.10"
     }
 }
 

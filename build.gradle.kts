@@ -9,6 +9,53 @@ repositories {
     maven("https://packages.jetbrains.team/maven/p/kt/dev")
 }
 
+/**
+ * Project properties this build understands. Gradle silently accepts any `-P<name>=<value>`,
+ * so a typo (`-PmnorepoDir=...`) would fall back to the default scan root and produce a green
+ * build against the bundled fixture - the same silent-success failure mode the tool's exit
+ * code 2 exists to prevent. Fail the build instead.
+ */
+val knownProjectProperties = setOf(
+    "monorepoDir",
+    "allowlist",
+    "kgpEngineVersion",
+    "excludePatterns",
+    "reportFile",
+)
+
+run {
+    // Only command-line `-P` properties are validated; namespaced ones (org.gradle.*, kotlin.*,
+    // systemProp.*) belong to Gradle/plugins and are left alone.
+    val unknown = gradle.startParameter.projectProperties.keys
+        .filter { "." !in it && it !in knownProjectProperties }
+    if (unknown.isNotEmpty()) {
+        val details = unknown.joinToString("\n") { name ->
+            val suggestion = knownProjectProperties.minByOrNull { levenshtein(name.lowercase(), it.lowercase()) }
+                ?.takeIf { levenshtein(name.lowercase(), it.lowercase()) <= 4 }
+            "  -P$name" + (suggestion?.let { " (did you mean -P$it?)" } ?: "")
+        }
+        throw GradleException(
+            "Unknown project ${if (unknown.size == 1) "property" else "properties"}:\n$details\n" +
+                "Known properties: ${knownProjectProperties.sorted().joinToString(", ") { "-P$it" }}"
+        )
+    }
+}
+
+/** Plain Levenshtein distance, used only to suggest the closest known property name. */
+fun levenshtein(a: String, b: String): Int {
+    var previous = IntArray(b.length + 1) { it }
+    for (i in 1..a.length) {
+        val current = IntArray(b.length + 1)
+        current[0] = i
+        for (j in 1..b.length) {
+            val substitute = previous[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1
+            current[j] = minOf(current[j - 1] + 1, previous[j] + 1, substitute)
+        }
+        previous = current
+    }
+    return previous[b.length]
+}
+
 // KGP version whose @Deprecated API set is indexed for name-matching
 // override with -PkgpEngineVersion=<ver> to match the target monorepo's KGP version
 val engineVersion = (findProperty("kgpEngineVersion") as String?) ?: "2.4.0"
@@ -51,14 +98,4 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     // identify allowlist
     val allowlistArg = findProperty("allowlist")?.toString().orEmpty()
     args = listOf(monorepo, allowlistArg)
-}
-
-// FOR TESTING PURPOSES ONLY: secondary task to print out all deprecated APIs from KGP JAR.
-tasks.register<JavaExec>("printKgpDeprecations") {
-    group = "verification"
-    description = "extracts & prints all deprecated APIs from given KGP jar"
-    classpath = sourceSets.main.get().runtimeClasspath
-    mainClass.set("org.jetbrains.kotlin.deprecations.PrintDeprecationsKt")
-    systemProperty("kgp.engineVersion", engineVersion)
-    systemProperty("kgp.pluginJars", kgpJars.files.joinToString(File.pathSeparator))
 }

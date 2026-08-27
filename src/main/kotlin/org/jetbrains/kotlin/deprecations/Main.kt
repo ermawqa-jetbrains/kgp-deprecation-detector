@@ -14,28 +14,45 @@ import kotlin.system.exitProcess
  *  - **Reflective calls** - a member name passed as a string literal to a `callReflective*`
  *    helper (cross-KGP-version compat dispatch), resolved only at runtime.
  *
- * Exit 1 if any `ERROR`- or `HIDDEN`-level match is found, else 0.
+ * Exit 1 if any `ERROR`- or `HIDDEN`-level match is found, 2 if the tool could not run at all
+ * (bad arguments, missing allowlist, unusable KGP jars), else 0.
  */
 fun main(args: Array<String>) {
+    exitProcess(run(args))
+}
+
+/** Exit code meaning "the check ran and found blocking usages". */
+internal const val EXIT_FINDINGS = 1
+
+/**
+ * Exit code meaning "the check never ran" - a setup failure. Deliberately distinct from
+ * [EXIT_FINDINGS] so CI can tell a broken invocation from real violations; a silent success
+ * on a mistyped path would hide exactly the signal this tool exists to restore.
+ */
+internal const val EXIT_SETUP_FAILURE = 2
+
+internal fun run(args: Array<String>): Int {
     // create report file. Mirrors everything printed to stdout/stderr into `-PreportFile`
     val reportFilePath = setUpReportFileTee()
 
     // make sure agrs not empty
     if (args.isEmpty() || args[0].isBlank()) {
         printHelpUsage()
-        return
+        return EXIT_SETUP_FAILURE
     }
 
     // make sure root is directory
     val scanRoot = File(args[0]).canonicalFile
     if (!scanRoot.isDirectory) {
         System.err.println("Not a directory: ${scanRoot.path}")
-        return
+        return EXIT_SETUP_FAILURE
     }
 
     // get allowlist
-    val allowlist = args.getOrNull(1)?.takeIf { it.isNotBlank() }
-        ?.let { loadAllowlist(File(it)) ?: return } ?: emptySet()
+    val allowlistPath = args.getOrNull(1)?.takeIf { it.isNotBlank() }
+    val allowlist = if (allowlistPath == null) emptySet() else {
+        loadAllowlist(File(allowlistPath)) ?: return EXIT_SETUP_FAILURE
+    }
 
     // exclude test fixtures + known non-script false positives;
     // -PexcludePatterns adds more on top
@@ -58,13 +75,18 @@ fun main(args: Array<String>) {
         .split(File.pathSeparator).filter { it.isNotBlank() }
     if (jars.isEmpty()) {
         System.err.println("No KGP jars provided (kgp.pluginJars) - nothing to match against.")
-        return
+        return EXIT_SETUP_FAILURE
     }
-    // get list of deprecated APIs from JAR
-    val index = jars.flatMap { runCatching { KgpDeprecationExtractor.extract(it) }.getOrDefault(emptyList()) }
+    // get list of deprecated APIs from JAR. A jar that fails to open is reported, never swallowed:
+    // a silently partial index looks exactly like a clean run.
+    val index = jars.flatMap { jar ->
+        runCatching { KgpDeprecationExtractor.extract(jar) }
+            .onFailure { System.err.println("Failed to read KGP jar '$jar': $it") }
+            .getOrDefault(emptyList())
+    }
     if (index.isEmpty()) {
         System.err.println("No @Deprecated symbols found in the KGP jars.")
-        return
+        return EXIT_SETUP_FAILURE
     }
 
     // print key info about the current session at the beginning
@@ -107,11 +129,12 @@ fun main(args: Array<String>) {
     val hidden = findings.count { it.level == DeprecationLevel.HIDDEN }
 
     // Gate: WARNING-only (or clean) passes; ERROR or HIDDEN fails the run
-    if (errors > 0 || hidden > 0) {
+    return if (errors > 0 || hidden > 0) {
         System.err.println("Result: FAIL")
-        exitProcess(1)
+        EXIT_FINDINGS
     } else {
         println("Result: OK")
+        0
     }
 }
 

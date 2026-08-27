@@ -82,6 +82,8 @@ The detector operates in two independent passes combined with an index and a fin
 | `excludePatterns` | Comma-separated path substrings to skip (added to built-in defaults) | Built-in test/fixture paths |
 | `reportFile` | Path to mirror stdout/stderr output for CI artifacts | `build/reports/kgp-deprecations.txt` |
 
+Unknown `-P` properties fail the build at configuration time (with a "did you mean" suggestion for near-misses). Gradle itself ignores unrecognised `-P` flags, so a typo such as `-PmonrepoDir=<path>` would otherwise silently scan the default `test-monorepo` fixture and report a clean run.
+
 ### Built-in Exclusions
 Drops test fixtures, test sources, and known false positives:
 `/testData/`, `/testdata/`, `/testResources/`, `/testSources/`, `/testSrc/`, `/test/`, `/tests/`, `/integration-tests/`, `/agpIntegrationTestSrc/`, `/resources/`, `/privacy/KotlinNotebookSystemPromptPrivacySafeWrapper.kt`, `/fleet/buildtool/bundles/helpers.kt`.
@@ -89,6 +91,7 @@ Drops test fixtures, test sources, and known false positives:
 ### Exit Codes
 - **`0`** - Clean or `WARNING`-only matches (warnings reported but do not fail the build).
 - **`1`** - At least one `ERROR`- or `HIDDEN`-level match found.
+- **`2`** - Setup failure: the check never ran (missing/blank scan root, scan root is not a directory, allowlist file not found, no KGP jars provided, or the jars yielded an empty index). Distinct from `1` so CI can tell a broken invocation from real violations.
 
 ---
 
