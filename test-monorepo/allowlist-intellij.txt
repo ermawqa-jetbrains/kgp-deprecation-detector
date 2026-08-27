@@ -1,7 +1,18 @@
 # Allowlist for real IntelliJ monorepo runs (-Pallowlist=test-monorepo/allowlist-intellij.txt).
-# These are false positives (I hope) from name-matching against generic member names -
-# the deprecated symbol's member name collides with a common Groovy/Gradle/Kotlin keyword
-# or lambda variable name, not an actual call to the deprecated API.
+# Every entry is a name-matching false positive: the deprecated symbol's member name collides
+# with a common Groovy/Gradle/Kotlin keyword or lambda variable name, and the scanned text is
+# not an actual call to the deprecated API.
+#
+# kgp-version: 2.4.10
+# owner: KQA
+#
+# Rules (enforced by AllowlistTest):
+#  - the '# kgp-version:' header above states which KGP index these entries were curated
+#    against; the tool prints a note when it does not match -PkgpEngineVersion, because a bump
+#    can turn a false positive into a silenced real violation. Re-review the entries and update
+#    the header when you move the version.
+#  - every entry must be preceded by a '#' comment giving the reason it is a false positive.
+#    An unexplained entry cannot be re-verified by anyone else later.
 
 # "create" collides with the generic TaskContainer.create(...) call
 org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreApplicationEnvironment$Companion.create

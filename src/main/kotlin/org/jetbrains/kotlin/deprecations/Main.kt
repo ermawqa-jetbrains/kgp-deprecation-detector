@@ -50,8 +50,9 @@ internal fun run(args: Array<String>): Int {
 
     // get allowlist
     val allowlistPath = args.getOrNull(1)?.takeIf { it.isNotBlank() }
-    val allowlist = if (allowlistPath == null) emptySet() else {
-        loadAllowlist(File(allowlistPath)) ?: return EXIT_SETUP_FAILURE
+    val allowlistFile = allowlistPath?.let(::File)
+    val allowlist = if (allowlistFile == null) emptySet() else {
+        loadAllowlist(allowlistFile) ?: return EXIT_SETUP_FAILURE
     }
 
     // exclude test fixtures + known non-script false positives;
@@ -71,6 +72,7 @@ internal fun run(args: Array<String>): Int {
 
     //check availability of JAR for given (or default) version
     val engineVersion = System.getProperty("kgp.engineVersion")?.takeIf { it.isNotBlank() }
+    val toolRevision = System.getProperty("kgp.toolRevision")?.takeIf { it.isNotBlank() }
     val jars = System.getProperty("kgp.pluginJars").orEmpty()
         .split(File.pathSeparator).filter { it.isNotBlank() }
     if (jars.isEmpty()) {
@@ -98,10 +100,13 @@ internal fun run(args: Array<String>): Int {
     println("KGP DEPRECATION CHECK")
     println("  Scanning : ${scanRoot.path}")
     println("  KGP      : ${engineVersion ?: "(version unknown)"} (${index.size} deprecated symbol(s) indexed)")
+    // Traceability: an archived report must say which revision of the tool produced it.
+    println("  Tool     : ${toolRevision ?: "(revision unknown)"}")
     if (skippedClasses > 0) {
         println("  Index    : $skippedClasses class(es) skipped (internal/utils/impl/Android) - pass -PfullIndex to include them")
     }
     println("  Allowlist: ${if (allowlist.isEmpty()) "(none)" else "${allowlist.size} entries"}")
+    if (allowlistFile != null) warnOnAllowlistDrift(allowlistFile, engineVersion)
     if (excludePatterns.isNotEmpty()) println("  Excluded : ${excludePatterns.joinToString(", ")}")
     if (reportFilePath != null) println("  Report   : $reportFilePath")
     println()
@@ -157,6 +162,30 @@ private fun setUpReportFileTee(): String? {
         Runtime.getRuntime().addShutdownHook(Thread { fileStream.flush(); fileStream.close() })
     }
     return reportFilePath
+}
+
+/**
+ * An allowlist entry is a claim that a *specific* KGP version's index produces that particular
+ * false positive; a KGP bump can turn the same entry into a silenced real violation. The file
+ * declares the version it was curated against as `# kgp-version: <ver>` and a mismatch is
+ * reported so the entries get re-reviewed instead of being trusted indefinitely.
+ */
+internal fun warnOnAllowlistDrift(file: File, engineVersion: String?) {
+    val declared = runCatching {
+        file.readLines().firstNotNullOfOrNull { line ->
+            Regex("""^\s*#\s*kgp-version:\s*(\S+)""").find(line)?.groupValues?.get(1)
+        }
+    }.getOrNull()
+    when {
+        declared == null -> println(
+            "  Note     : allowlist declares no '# kgp-version: <ver>' header - its entries cannot be " +
+                "checked against the indexed KGP version."
+        )
+        engineVersion != null && declared != engineVersion -> println(
+            "  Note     : allowlist was curated against KGP $declared but the index is KGP $engineVersion - " +
+                "re-review its entries; a bump can turn a false positive into a silenced real violation."
+        )
+    }
 }
 
 private fun loadAllowlist(file: File): Set<String>? {

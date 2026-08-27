@@ -70,7 +70,8 @@ The detector operates in two independent passes combined with an index and a fin
     [-PkgpEngineVersion=2.4.20-dev-5677] \
     [-PexcludePatterns=/foo/,/bar/] \
     [-PreportFile=/path/to/report.txt] \
-    [-PfullIndex]
+    [-PfullIndex] \
+    [-PbuildScan]
 ```
 
 ### Parameters
@@ -79,10 +80,15 @@ The detector operates in two independent passes combined with an index and a fin
 | :--- | :--- | :--- |
 | `monorepoDir` | Root directory to scan for `.kt`/`.java` files | `test-monorepo` |
 | `allowlist` | Optional file with one deprecated-symbol qualified name per line (`#` for comments) | `(none)` |
-| `kgpEngineVersion` | KGP version whose `@Deprecated` API set is indexed | `2.4.0` |
+| `kgpEngineVersion` | KGP version whose `@Deprecated` API set is indexed | `2.4.10` |
 | `excludePatterns` | Comma-separated path substrings to skip (added to built-in defaults) | Built-in test/fixture paths |
 | `reportFile` | Path to mirror stdout/stderr output for CI artifacts | `build/reports/kgp-deprecations.txt` |
 | `fullIndex` | Keep `internal`/`utils`/`impl` packages and `Android*` classes in the deprecation index (more coverage, more noise) | Filtered out |
+| `buildScan` | Publish a Develocity build scan to `ge.labs.jb.gg`. Opt-in so an offline or network-restricted CI agent does not depend on reaching it | Not published |
+
+`monorepoDir` is resolved against the project directory and validated at **configuration** time: a path that is not an existing directory fails the build before the JVM starts (a truncated absolute path used to be caught only after startup). The check task always runs (`outputs.upToDateWhen { false }`) - a checker must never be skipped as up-to-date.
+
+The build pins `jvmToolchain(17)`, so the tool compiles and runs against the same JDK locally and in CI.
 
 Unknown `-P` properties fail the build at configuration time (with a "did you mean" suggestion for near-misses). Gradle itself ignores unrecognised `-P` flags, so a typo such as `-PmonrepoDir=<path>` would otherwise silently scan the default `test-monorepo` fixture and report a clean run.
 
@@ -103,6 +109,14 @@ Both passes share one candidate search (`SourceFileFinder`): a ripgrep fast path
 ### Built-in Exclusions
 Drops test fixtures, test sources, and known false positives:
 `/testData/`, `/testdata/`, `/testResources/`, `/testSources/`, `/testSrc/`, `/test/`, `/tests/`, `/integration-tests/`, `/agpIntegrationTestSrc/`, `/resources/`, `/privacy/KotlinNotebookSystemPromptPrivacySafeWrapper.kt`, `/fleet/buildtool/bundles/helpers.kt`.
+
+### Allowlist Rules
+An allowlist entry suppresses a finding permanently, so it must stay auditable:
+- **A reason per entry.** Every entry is preceded by a `#` comment explaining why it is a false positive; an unexplained entry cannot be re-verified later. Pinned by `AllowlistTest`.
+- **A declared KGP version.** The file records `# kgp-version: <ver>` - the index the entries were curated against. The banner prints a note when it differs from `-PkgpEngineVersion` (or when the header is missing), because a KGP bump can turn a former false positive into a silenced real violation. Re-review the entries and update the header when the version moves.
+
+### Report Traceability
+The banner records both the indexed KGP version and the tool's own revision (`git describe`, passed as `kgp.toolRevision`), so an archived CI report can be tied back to the code that produced it.
 
 ### Exit Codes
 - **`0`** - Clean or `WARNING`-only matches (warnings reported but do not fail the build).

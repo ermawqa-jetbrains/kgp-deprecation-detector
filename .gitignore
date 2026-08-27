@@ -43,9 +43,13 @@ bin/
 
 ### Claude Code session ###
 .claude/
+# CLAUDE.md is a local pointer to the tracked AGENTS.md (the contributor notes live in git:
+# every load-bearing gotcha there must survive a fresh clone).
 CLAUDE.md
 
 ### Junie Code session ###
 .junie/
-AGENTS.md
+
+### Generated analysis output ###
+graphify-out/
 
