@@ -8,8 +8,8 @@ internal object RipgrepDetector {
     fun reportMissing() {
         if (warningPrinted.compareAndSet(false, true)) {
             println(
-                "Note: ripgrep (rg) was not found on PATH - falling back to an in-process file walk. " +
-                    "The results are the same; installing rg only makes the scan faster."
+                "NOTE: ripgrep (rg) was not found on PATH - falling back to an in-process file walk. " +
+                "Install rg to make the scan much faster."
             )
         }
     }
