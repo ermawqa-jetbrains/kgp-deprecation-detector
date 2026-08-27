@@ -11,7 +11,7 @@ repositories {
 
 kotlin {
     // Pins toolchain to ensure consistent bytecode across environments.
-    jvmToolchain(17)
+    jvmToolchain(21)
 }
 
 /**
