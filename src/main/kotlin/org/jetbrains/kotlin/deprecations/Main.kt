@@ -88,7 +88,6 @@ internal fun run(args: Array<String>): Int {
         println("  Index    : $skippedClasses class(es) skipped (internal/utils/impl/Android) - pass -PfullIndex to include them")
     }
     println("  Allowlist: ${if (allowlist.isEmpty()) "(none)" else "${allowlist.size} entries"}")
-    if (allowlistFile != null) warnOnAllowlistDrift(allowlistFile, engineVersion)
     if (excludePatterns.isNotEmpty()) println("  Excluded : ${excludePatterns.joinToString(", ")}")
     if (reportFilePath != null) println("  Report   : $reportFilePath")
     println()
@@ -139,28 +138,6 @@ private fun setUpReportFileTee(): String? {
         Runtime.getRuntime().addShutdownHook(Thread { fileStream.flush(); fileStream.close() })
     }
     return reportFilePath
-}
-
-/**
- * Warn if allowlist version differs from indexed KGP version.
- * Helps prevent stale false-positives after a KGP bump.
- */
-internal fun warnOnAllowlistDrift(file: File, engineVersion: String?) {
-    val declared = runCatching {
-        file.readLines().firstNotNullOfOrNull { line ->
-            Regex("""^\s*#\s*kgp-version:\s*(\S+)""").find(line)?.groupValues?.get(1)
-        }
-    }.getOrNull()
-    when {
-        declared == null -> println(
-            "  Note     : allowlist declares no '# kgp-version: <ver>' header - its entries cannot be " +
-                "checked against the indexed KGP version."
-        )
-        engineVersion != null && declared != engineVersion -> println(
-            "  Note     : allowlist was curated against KGP $declared but the index is KGP $engineVersion - " +
-                "re-review its entries; a bump can turn a false positive into a silenced real violation."
-        )
-    }
 }
 
 private fun loadAllowlist(file: File): Set<String>? {

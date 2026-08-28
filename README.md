@@ -113,7 +113,6 @@ Drops test fixtures, test sources, and known false positives:
 ### Allowlist Rules
 An allowlist entry suppresses a finding permanently, so it must stay auditable:
 - **A reason per entry.** Every entry is preceded by a `#` comment explaining why it is a false positive; an unexplained entry cannot be re-verified later. Pinned by `AllowlistTest`.
-- **A declared KGP version.** The file records `# kgp-version: <ver>` - the index the entries were curated against. The banner prints a note when it differs from `-PkgpEngineVersion` (or when the header is missing), because a KGP bump can turn a former false positive into a silenced real violation. Re-review the entries and update the header when the version moves.
 
 ### Exit Codes
 - **`0`** - Clean or `WARNING`-only matches (warnings reported but do not fail the build).

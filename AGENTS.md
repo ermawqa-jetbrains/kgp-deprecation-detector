@@ -209,13 +209,10 @@ Pass 2 (reflective calls):
   plugin cannot serialize a settings-script lambda into the configuration cache (it fails the
   build with "cannot serialize Gradle script object references"), and merely leaving `server`
   unset still prints a scan-not-published notice on every run.
-- **The allowlist must stay auditable: a reason per entry and a declared
-  `# kgp-version: <ver>`.** `warnOnAllowlistDrift` (`Main.kt`) prints a note when the declared
-  version differs from `kgp.engineVersion`, or when the header is absent — an entry is a claim
-  about one specific index, and a KGP bump can turn a former false positive into a silenced real
-  violation. Pinned by `AllowlistTest` (which also fails on an entry with no preceding `#`
-  comment). It is a *note*, not a failure: a version bump must not block the run it is warning
-  about.
+- **The allowlist must stay auditable: a reason per entry.** It is a plain list of qualified
+  names, one per line, with `#` starting a comment; every entry must be preceded by a `#` comment
+  explaining why it is a false positive. Pinned by `AllowlistTest`, which fails on an entry with
+  no preceding comment. No other structure (owner, KGP version header, etc.) is enforced.
 - **The banner stays minimal.** It records what was scanned, the KGP version and the allowlist —
   nothing else. A `Tool : <git describe>` revision line was added once for CI traceability and
   removed again: the check runs once per branching/deprecation phase and is read by developers,
