@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
  */
 class AllowlistTest {
 
-    private val allowlist = File("test-monorepo/allowlist-intellij.txt")
+    private val allowlist = File("config/allowlist-intellij.txt")
 
     @Test
     fun everyEntryIsPrecededByAReasonComment() {

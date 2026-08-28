@@ -60,7 +60,7 @@ This is **name-matching, not resolution** — unavoidable, since Groovy is dynam
 (no frontend can resolve it), a Kotlin-DSL string literal isn't compiled by anything either, and
 a reflective call's target isn't known until runtime. Has false positives by nature (generic
 names like `project`/`target`/`create`/`dependencies` collide across unrelated declarations); the
-allowlist is the mitigation, not a fix. See `test-monorepo/allowlist-intellij.txt` for the set of
+allowlist is the mitigation, not a fix. See `config/allowlist-intellij.txt` for the set of
 generic-name collisions found scanning the real IntelliJ monorepo.
 
 ## File map

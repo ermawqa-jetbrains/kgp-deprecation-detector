@@ -1,4 +1,4 @@
-# Allowlist for real IntelliJ monorepo runs (-Pallowlist=test-monorepo/allowlist-intellij.txt).
+# Allowlist for real IntelliJ monorepo runs (-Pallowlist=config/allowlist-intellij.txt).
 # Every entry is a name-matching false positive: the deprecated symbol's member name collides
 # with a common Groovy/Gradle/Kotlin keyword or lambda variable name, and the scanned text is
 # not an actual call to the deprecated API.
