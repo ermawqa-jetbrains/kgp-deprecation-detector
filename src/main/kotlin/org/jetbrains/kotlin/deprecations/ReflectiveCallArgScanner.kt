@@ -22,6 +22,8 @@ class ReflectiveCallArgScanner(index: List<DeprecatedSymbol>) {
                     symbol = symbol.qualifiedName,
                     level = symbol.level,
                     message = symbol.message,
+                    className = symbol.className,
+                    memberName = symbol.memberName,
                 )
             }
         }

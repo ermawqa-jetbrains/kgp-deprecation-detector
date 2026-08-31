@@ -160,6 +160,15 @@ Pass 2 (reflective calls):
   `extractIndex` returns `outOfScopeClasses`, printed as the banner's `Scope` line (~1370 classes on
   KGP 2.5.0-dev), so the cost stays visible. Test fixtures must declare fake classes in a KGP
   package.
+- **`$DefaultImpls` classes are dropped from the index, and findings are grouped/counted by
+  `Finding.deprecationId` (member, else simple class name) + message, not by declaring class.** A
+  default interface method or inherited property is declared in every sub-interface of a hierarchy,
+  so one `kotlinOptions { }` call site produced 20+ identical report sections (`KotlinCompile`,
+  `KotlinJvmCompile`, `KotlinCompilation`, ...) and was counted 20+ times. `Main` dedupes usages on
+  (file, line, column, deprecationId, message) before the summary and the exit gate, and each report
+  section lists the declaring classes (`Declared in: <qualified>, +N more` - qualified because an
+  allowlist entry is `<class>.<member>`). The `$DefaultImpls` skip is counted and printed as the
+  banner's `Synthetic` line; allowlist matching still uses the full `Finding.symbol`.
 - **Pass 2 resolves same-file string constants (Tier 1), and only those.**
   `ReflectiveCallArgExtractor` builds a `name -> literal` map from the file's own
   `val`/`const val`/Java `static final String` declarations and accepts an identifier (optionally

@@ -179,6 +179,29 @@ class KgpDeprecationExtractorTest {
     }
 
     @Test
+    fun default_impls_classes_are_dropped_and_reported() {
+        // $DefaultImpls duplicates its interface, so one call site was reported twice.
+        val jar = jarOf(
+            "org/jetbrains/kotlin/gradle/dsl/KotlinCompile.class" to classBytes(
+                "org/jetbrains/kotlin/gradle/dsl/KotlinCompile",
+                methods = listOf(MethodSpec("getKotlinOptions", "()V", DeprecationSpec("ERROR", "use compilerOptions", null))),
+            ),
+            "org/jetbrains/kotlin/gradle/dsl/KotlinCompile\$DefaultImpls.class" to classBytes(
+                "org/jetbrains/kotlin/gradle/dsl/KotlinCompile\$DefaultImpls",
+                methods = listOf(MethodSpec("getKotlinOptions", "()V", DeprecationSpec("ERROR", "use compilerOptions", null))),
+            ),
+        )
+
+        val index = KgpDeprecationExtractor.extractIndex(jar.absolutePath)
+
+        assertEquals(
+            setOf("org.jetbrains.kotlin.gradle.dsl.KotlinCompile"),
+            index.symbols.map { it.className }.toSet(),
+        )
+        assertEquals(1, index.syntheticClasses)
+    }
+
+    @Test
     fun defaults_to_WARNING_when_level_attribute_missing() {
         // Default to WARNING if level is missing.
         val cw = ClassWriter(0)

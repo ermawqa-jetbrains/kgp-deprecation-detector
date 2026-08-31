@@ -24,6 +24,7 @@ object KgpDeprecationExtractor {
         val symbols: List<DeprecatedSymbol>,
         val skippedClasses: Int,
         val outOfScopeClasses: Int = 0,
+        val syntheticClasses: Int = 0,
     )
 
     fun extract(jarPath: String, fullIndex: Boolean = false): List<DeprecatedSymbol> =
@@ -34,6 +35,7 @@ object KgpDeprecationExtractor {
         val results = mutableListOf<DeprecatedSymbol>()
         var skipped = 0
         var outOfScope = 0
+        var synthetic = 0
 
         JarFile(jarPath).use { jar ->
             jar.entries().asSequence()
@@ -42,6 +44,11 @@ object KgpDeprecationExtractor {
                     val inScope = entry.name.isInPackageScope()
                     if (!inScope) outOfScope++
                     inScope
+                }
+                .filter { entry ->
+                    val syntheticClass = entry.name.isSyntheticDuplicate()
+                    if (syntheticClass) synthetic++
+                    !syntheticClass
                 }
                 .filter { entry ->
                     val excluded = !fullIndex && entry.name.isExcluded()
@@ -57,7 +64,7 @@ object KgpDeprecationExtractor {
                 }
         }
 
-        return JarIndex(results, skipped, outOfScope)
+        return JarIndex(results, skipped, outOfScope, synthetic)
     }
 }
 
@@ -150,6 +157,13 @@ private class DeprecationAnnotationVisitor(
  */
 private fun String.isInPackageScope(): Boolean =
     removeSuffix(".class").replace('/', '.').startsWith("${KgpDeprecationExtractor.PACKAGE_SCOPE}.")
+
+/**
+ * Drops `$DefaultImpls`: the compiler copies every default interface method there, so the same
+ * deprecation would be indexed twice under two class names.
+ */
+private fun String.isSyntheticDuplicate(): Boolean =
+    removeSuffix(".class").substringAfterLast('/').contains("\$DefaultImpls")
 
 /**
  * Filters internal packages. Surfaced and opt-out because KGP sometimes

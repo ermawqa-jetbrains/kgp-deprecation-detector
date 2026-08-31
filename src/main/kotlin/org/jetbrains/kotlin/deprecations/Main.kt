@@ -73,6 +73,7 @@ internal fun run(args: Array<String>): Int {
     val index = jarIndexes.flatMap { it.symbols }
     val skippedClasses = jarIndexes.sumOf { it.skippedClasses }
     val outOfScopeClasses = jarIndexes.sumOf { it.outOfScopeClasses }
+    val syntheticClasses = jarIndexes.sumOf { it.syntheticClasses }
     if (index.isEmpty()) {
         System.err.println("No @Deprecated symbols found in the KGP jars.")
         return EXIT_SETUP_FAILURE
@@ -80,6 +81,7 @@ internal fun run(args: Array<String>): Int {
 
     val banner = buildString {
         appendLine("KGP DEPRECATION CHECK")
+        appendLine("NOTE: MIGHT INCLUDE FALSE POSITIVES!")
         appendLine("  Scanning : ${scanRoot.path}")
         appendLine("  KGP      : ${engineVersion ?: "(version unknown)"} (${index.size} deprecated symbol(s) indexed)")
         if (skippedClasses > 0) {
@@ -87,6 +89,9 @@ internal fun run(args: Array<String>): Int {
         }
         appendLine("  Scope    : ${KgpDeprecationExtractor.PACKAGE_SCOPE}.*" +
             if (outOfScopeClasses > 0) " ($outOfScopeClasses non-KGP class(es) ignored)" else "")
+        if (syntheticClasses > 0) {
+            appendLine("  Synthetic: $syntheticClasses \$DefaultImpls class(es) ignored (copies of their interface)")
+        }
         appendLine("  Allowlist: ${if (allowlist.isEmpty()) "(none)" else "${allowlist.size} entries"}")
         if (excludePatterns.isNotEmpty()) appendLine("  Excluded : ${excludePatterns.joinToString(", ")}")
         if (reportFilePath != null) appendLine("  Report   : $reportFilePath")
@@ -111,9 +116,12 @@ internal fun run(args: Array<String>): Int {
     }.toList().flatten()
 
     val findings = (embeddedFindings + reflectiveFindings).filterNot { it.symbol in allowlist }
+    // One call site of an inherited/default member matches every class of the hierarchy that
+    // declares it; counts and the exit gate must see it as a single usage.
+    val usages = findings.distinctBy { listOf(it.file, it.line, it.column, it.deprecationId, it.message) }
 
     val scannedLine = "Scanned ${candidates.size} embedded-script candidate file(s), ${reflectiveCandidates.size} reflective-call candidate file(s)."
-    val summaryLine = reportSummaryLine(findings)
+    val summaryLine = reportSummaryLine(usages)
 
     if (reportFilePath != null) {
         println(scannedLine)
@@ -127,7 +135,7 @@ internal fun run(args: Array<String>): Int {
                 appendLine(scannedLine)
                 appendLine()
                 appendLine(summaryLine)
-                if (findings.isNotEmpty()) append(reportDetails(findings))
+                if (usages.isNotEmpty()) append(reportDetails(findings))
             },
         )
         println(summaryLine)
@@ -136,11 +144,11 @@ internal fun run(args: Array<String>): Int {
         println(scannedLine)
         println()
         println(summaryLine)
-        if (findings.isNotEmpty()) print(reportDetails(findings))
+        if (usages.isNotEmpty()) print(reportDetails(findings))
     }
 
-    val errors = findings.count { it.level == DeprecationLevel.ERROR }
-    val hidden = findings.count { it.level == DeprecationLevel.HIDDEN }
+    val errors = usages.count { it.level == DeprecationLevel.ERROR }
+    val hidden = usages.count { it.level == DeprecationLevel.HIDDEN }
 
     // WARNING passes; ERROR/HIDDEN fails
     return if (errors > 0 || hidden > 0) {
@@ -181,17 +189,28 @@ private fun reportSummaryLine(findings: List<Finding>): String {
     return "${findings.size} usage(s) in $affected file(s): $breakdown match(es)."
 }
 
+/**
+ * One section per logical deprecation. Grouping by member and message instead of by declaring class
+ * collapses the sub-interface hierarchy (`KotlinCompile`, `KotlinJvmCompile`, ...), which used to
+ * repeat the very same call site 20+ times.
+ */
 private fun reportDetails(findings: List<Finding>): String = buildString {
     appendLine("------------------------------------------------------------")
     for (level in listOf(DeprecationLevel.ERROR, DeprecationLevel.HIDDEN, DeprecationLevel.WARNING)) {
         val bucket = findings.filter { it.level == level }
         if (bucket.isEmpty()) continue
-        bucket.groupBy { it.symbol }.forEach { (symbol, usages) ->
+        bucket.groupBy { it.deprecationId to it.message }.forEach { (key, group) ->
+            val (deprecationId, message) = key
+            // Qualified names: an allowlist entry is '<class>.<member>'.
+            val classes = group.map { it.className }.distinct().sorted()
+            val hits = group.distinctBy { listOf(it.file, it.line, it.column) }
+                .sortedWith(compareBy({ it.file }, { it.line }, { it.column }))
             appendLine()
-            appendLine("[${level.name}] $symbol")
-            appendLine("  Reason: ${usages.first().message}")
-            appendLine("  Hits  : ${usages.size}")
-            usages.forEach { f ->
+            appendLine("[${level.name}] $deprecationId")
+            appendLine("  Declared in: ${describeClasses(classes)}")
+            appendLine("  Reason: $message")
+            appendLine("  Hits  : ${hits.size}")
+            hits.forEach { f ->
                 // Absolute path for IDE click-to-open
                 appendLine("    ${f.file}:${f.line}:${f.column}")
                 sourceLineWithCaret(f)?.forEach { appendLine("      $it") }
@@ -199,6 +218,13 @@ private fun reportDetails(findings: List<Finding>): String = buildString {
         }
     }
     appendLine("------------------------------------------------------------")
+}
+
+/** Lists declaring classes, truncated so a 20-interface hierarchy stays readable. */
+private fun describeClasses(classes: List<String>): String {
+    val shown = classes.take(3)
+    val rest = classes.size - shown.size
+    return shown.joinToString(", ") + if (rest > 0) ", +$rest more" else ""
 }
 
 private fun sourceLineWithCaret(finding: Finding): List<String>? {
