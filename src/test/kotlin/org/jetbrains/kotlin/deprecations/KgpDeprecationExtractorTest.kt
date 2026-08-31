@@ -13,6 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+// Fixtures live in a KGP package: the index only keeps org.jetbrains.kotlin.* classes.
 class KgpDeprecationExtractorTest {
 
     private val tmp: File = createTempDirectory("kgp-extract-test").toFile()
@@ -25,8 +26,8 @@ class KgpDeprecationExtractorTest {
     @Test
     fun extracts_class_level_deprecation() {
         val jar = jarOf(
-            "foo/OldClass.class" to classBytes(
-                internalName = "foo/OldClass",
+            "org/jetbrains/kotlin/gradle/OldClass.class" to classBytes(
+                internalName = "org/jetbrains/kotlin/gradle/OldClass",
                 classAnnotation = DeprecationSpec("ERROR", "removed", "NewClass"),
             ),
         )
@@ -35,7 +36,7 @@ class KgpDeprecationExtractorTest {
 
         assertEquals(1, symbols.size)
         val s = symbols.single()
-        assertEquals("foo.OldClass", s.className)
+        assertEquals("org.jetbrains.kotlin.gradle.OldClass", s.className)
         assertNull(s.memberName)
         assertEquals(DeprecationLevel.ERROR, s.level)
         assertEquals("removed", s.message)
@@ -45,8 +46,8 @@ class KgpDeprecationExtractorTest {
     @Test
     fun extracts_method_level_deprecation_with_replaceWith() {
         val jar = jarOf(
-            "foo/KotlinCompilation.class" to classBytes(
-                internalName = "foo/KotlinCompilation",
+            "org/jetbrains/kotlin/gradle/KotlinCompilation.class" to classBytes(
+                internalName = "org/jetbrains/kotlin/gradle/KotlinCompilation",
                 methods = listOf(
                     MethodSpec(
                         name = "getDefaultSourceSetName",
@@ -61,7 +62,7 @@ class KgpDeprecationExtractorTest {
 
         assertEquals(1, symbols.size)
         val s = symbols.single()
-        assertEquals("foo.KotlinCompilation", s.className)
+        assertEquals("org.jetbrains.kotlin.gradle.KotlinCompilation", s.className)
         assertEquals("getDefaultSourceSetName", s.memberName)
         assertEquals(DeprecationLevel.ERROR, s.level)
         assertEquals("defaultSourceSet.name", s.replaceWith)
@@ -72,8 +73,8 @@ class KgpDeprecationExtractorTest {
     @Test
     fun extracts_all_deprecation_levels() {
         val jar = jarOf(
-            "foo/MultiLevel.class" to classBytes(
-                internalName = "foo/MultiLevel",
+            "org/jetbrains/kotlin/gradle/MultiLevel.class" to classBytes(
+                internalName = "org/jetbrains/kotlin/gradle/MultiLevel",
                 methods = listOf(
                     MethodSpec("aMethod", "()V", DeprecationSpec("WARNING", "w", null)),
                     MethodSpec("bMethod", "()V", DeprecationSpec("ERROR", "e", null)),
@@ -92,8 +93,8 @@ class KgpDeprecationExtractorTest {
     @Test
     fun ignores_non_deprecated_methods() {
         val jar = jarOf(
-            "foo/Plain.class" to classBytes(
-                internalName = "foo/Plain",
+            "org/jetbrains/kotlin/gradle/Plain.class" to classBytes(
+                internalName = "org/jetbrains/kotlin/gradle/Plain",
                 methods = listOf(MethodSpec("doX", "()V", null)),
             ),
         )
@@ -105,32 +106,32 @@ class KgpDeprecationExtractorTest {
     @Test
     fun excludes_internal_utils_impl_packages_and_android_classes() {
         val jar = jarOf(
-            "foo/Public.class" to classBytes("foo/Public", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "org/jetbrains/kotlin/gradle/Public.class" to classBytes("org/jetbrains/kotlin/gradle/Public", classAnnotation = DeprecationSpec("ERROR", "x", null)),
             // Exclude both top-level and nested internal packages.
-            "foo/internal/Hidden.class" to classBytes("foo/internal/Hidden", classAnnotation = DeprecationSpec("ERROR", "x", null)),
-            "foo/internal/sub/Hidden.class" to classBytes("foo/internal/sub/Hidden", classAnnotation = DeprecationSpec("ERROR", "x", null)),
-            "foo/utils/Helper.class" to classBytes("foo/utils/Helper", classAnnotation = DeprecationSpec("ERROR", "x", null)),
-            "foo/impl/Concrete.class" to classBytes("foo/impl/Concrete", classAnnotation = DeprecationSpec("ERROR", "x", null)),
-            "foo/AndroidThing.class" to classBytes("foo/AndroidThing", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "org/jetbrains/kotlin/gradle/internal/Hidden.class" to classBytes("org/jetbrains/kotlin/gradle/internal/Hidden", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "org/jetbrains/kotlin/gradle/internal/sub/Hidden.class" to classBytes("org/jetbrains/kotlin/gradle/internal/sub/Hidden", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "org/jetbrains/kotlin/gradle/utils/Helper.class" to classBytes("org/jetbrains/kotlin/gradle/utils/Helper", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "org/jetbrains/kotlin/gradle/impl/Concrete.class" to classBytes("org/jetbrains/kotlin/gradle/impl/Concrete", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "org/jetbrains/kotlin/gradle/AndroidThing.class" to classBytes("org/jetbrains/kotlin/gradle/AndroidThing", classAnnotation = DeprecationSpec("ERROR", "x", null)),
         )
 
         val classNames = KgpDeprecationExtractor.extract(jar.absolutePath).map { it.className }.toSet()
-        assertEquals(setOf("foo.Public"), classNames)
+        assertEquals(setOf("org.jetbrains.kotlin.gradle.Public"), classNames)
     }
 
     @Test
     fun fullIndex_keeps_excluded_packages_and_reports_no_skips() {
         // Filter must be opt-out because KGP ships public API in 'impl' or 'utils'.
         val jar = jarOf(
-            "foo/Public.class" to classBytes("foo/Public", classAnnotation = DeprecationSpec("ERROR", "x", null)),
-            "foo/internal/Hidden.class" to classBytes("foo/internal/Hidden", classAnnotation = DeprecationSpec("ERROR", "x", null)),
-            "foo/utils/Helper.class" to classBytes("foo/utils/Helper", classAnnotation = DeprecationSpec("ERROR", "x", null)),
-            "foo/AndroidThing.class" to classBytes("foo/AndroidThing", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "org/jetbrains/kotlin/gradle/Public.class" to classBytes("org/jetbrains/kotlin/gradle/Public", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "org/jetbrains/kotlin/gradle/internal/Hidden.class" to classBytes("org/jetbrains/kotlin/gradle/internal/Hidden", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "org/jetbrains/kotlin/gradle/utils/Helper.class" to classBytes("org/jetbrains/kotlin/gradle/utils/Helper", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "org/jetbrains/kotlin/gradle/AndroidThing.class" to classBytes("org/jetbrains/kotlin/gradle/AndroidThing", classAnnotation = DeprecationSpec("ERROR", "x", null)),
         )
 
         val full = KgpDeprecationExtractor.extractIndex(jar.absolutePath, fullIndex = true)
         assertEquals(
-            setOf("foo.Public", "foo.internal.Hidden", "foo.utils.Helper", "foo.AndroidThing"),
+            setOf("org.jetbrains.kotlin.gradle.Public", "org.jetbrains.kotlin.gradle.internal.Hidden", "org.jetbrains.kotlin.gradle.utils.Helper", "org.jetbrains.kotlin.gradle.AndroidThing"),
             full.symbols.map { it.className }.toSet(),
         )
         assertEquals(0, full.skippedClasses)
@@ -140,9 +141,9 @@ class KgpDeprecationExtractorTest {
     fun reports_how_many_classes_the_package_filter_dropped() {
         // Filtered classes must be reported to avoid silent partial runs.
         val jar = jarOf(
-            "foo/Public.class" to classBytes("foo/Public", classAnnotation = DeprecationSpec("ERROR", "x", null)),
-            "foo/internal/Hidden.class" to classBytes("foo/internal/Hidden", classAnnotation = DeprecationSpec("ERROR", "x", null)),
-            "foo/utils/Helper.class" to classBytes("foo/utils/Helper", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "org/jetbrains/kotlin/gradle/Public.class" to classBytes("org/jetbrains/kotlin/gradle/Public", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "org/jetbrains/kotlin/gradle/internal/Hidden.class" to classBytes("org/jetbrains/kotlin/gradle/internal/Hidden", classAnnotation = DeprecationSpec("ERROR", "x", null)),
+            "org/jetbrains/kotlin/gradle/utils/Helper.class" to classBytes("org/jetbrains/kotlin/gradle/utils/Helper", classAnnotation = DeprecationSpec("ERROR", "x", null)),
         )
 
         val filtered = KgpDeprecationExtractor.extractIndex(jar.absolutePath)
@@ -151,16 +152,43 @@ class KgpDeprecationExtractorTest {
     }
 
     @Test
+    fun package_scope_drops_bundled_third_party_classes_and_reports_them() {
+        // Third-party deprecations (e.g. kotlinx.coroutines 'merge') match common words everywhere.
+        val jar = jarOf(
+            "org/jetbrains/kotlin/gradle/dsl/KotlinCompile.class" to classBytes(
+                "org/jetbrains/kotlin/gradle/dsl/KotlinCompile",
+                classAnnotation = DeprecationSpec("ERROR", "x", null),
+            ),
+            "kotlinx/coroutines/flow/FlowKt.class" to classBytes(
+                "kotlinx/coroutines/flow/FlowKt",
+                classAnnotation = DeprecationSpec("ERROR", "merge", null),
+            ),
+            "org/gradle/api/Project.class" to classBytes(
+                "org/gradle/api/Project",
+                classAnnotation = DeprecationSpec("ERROR", "x", null),
+            ),
+        )
+
+        val scoped = KgpDeprecationExtractor.extractIndex(jar.absolutePath)
+
+        assertEquals(
+            setOf("org.jetbrains.kotlin.gradle.dsl.KotlinCompile"),
+            scoped.symbols.map { it.className }.toSet(),
+        )
+        assertEquals(2, scoped.outOfScopeClasses)
+    }
+
+    @Test
     fun defaults_to_WARNING_when_level_attribute_missing() {
         // Default to WARNING if level is missing.
         val cw = ClassWriter(0)
-        cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "foo/NoLevel", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "org/jetbrains/kotlin/gradle/NoLevel", null, "java/lang/Object", null)
         val av = cw.visitAnnotation("Lkotlin/Deprecated;", true)
         av.visit("message", "default level")
         av.visitEnd()
         cw.visitEnd()
 
-        val jar = jarOf("foo/NoLevel.class" to cw.toByteArray())
+        val jar = jarOf("org/jetbrains/kotlin/gradle/NoLevel.class" to cw.toByteArray())
         val s = KgpDeprecationExtractor.extract(jar.absolutePath).single()
         assertEquals(DeprecationLevel.WARNING, s.level)
         assertEquals("default level", s.message)
@@ -170,8 +198,8 @@ class KgpDeprecationExtractorTest {
     fun strips_dollar_annotations_suffix_from_kotlin_property_synthetic_method() {
         // Kotlin property annotations are on synthetic <name>$annotations method.
         val jar = jarOf(
-            "foo/PropHolder.class" to classBytes(
-                internalName = "foo/PropHolder",
+            "org/jetbrains/kotlin/gradle/PropHolder.class" to classBytes(
+                internalName = "org/jetbrains/kotlin/gradle/PropHolder",
                 methods = listOf(
                     MethodSpec(
                         name = "getDefaultSourceSetName\$annotations",
@@ -190,7 +218,7 @@ class KgpDeprecationExtractorTest {
     @Test
     fun extracts_field_level_deprecation() {
         val cw = ClassWriter(0)
-        cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "foo/WithField", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "org/jetbrains/kotlin/gradle/WithField", null, "java/lang/Object", null)
         val fv = cw.visitField(Opcodes.ACC_PUBLIC, "oldFlag", "Z", null, null)
         val av = fv.visitAnnotation("Lkotlin/Deprecated;", true)
         av.visit("message", "gone")
@@ -199,9 +227,9 @@ class KgpDeprecationExtractorTest {
         fv.visitEnd()
         cw.visitEnd()
 
-        val jar = jarOf("foo/WithField.class" to cw.toByteArray())
+        val jar = jarOf("org/jetbrains/kotlin/gradle/WithField.class" to cw.toByteArray())
         val s = KgpDeprecationExtractor.extract(jar.absolutePath).single()
-        assertEquals("foo.WithField", s.className)
+        assertEquals("org.jetbrains.kotlin.gradle.WithField", s.className)
         assertEquals("oldFlag", s.memberName)
         assertEquals(DeprecationLevel.ERROR, s.level)
     }

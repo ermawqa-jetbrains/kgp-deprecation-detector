@@ -154,6 +154,12 @@ Pass 2 (reflective calls):
   (`kgp.fullIndex`) disables it. KGP ships public API under `impl`/`utils` and an `Android*`
   symbol is exactly what an AGP-injected init script touches, so a silent unconditional filter
   was hiding real coverage. `extract(jar)` remains as the symbols-only convenience.
+- **The index is hard-scoped to `KgpDeprecationExtractor.PACKAGE_SCOPE` (`org.jetbrains.kotlin`).**
+  Not configurable: third-party `@Deprecated` members KGP bundles are not KGP API and carry generic
+  names - `kotlinx.coroutines.flow.FlowKt.merge` matched the word `merge` anywhere in the monorepo.
+  `extractIndex` returns `outOfScopeClasses`, printed as the banner's `Scope` line (~1370 classes on
+  KGP 2.5.0-dev), so the cost stays visible. Test fixtures must declare fake classes in a KGP
+  package.
 - **Pass 2 resolves same-file string constants (Tier 1), and only those.**
   `ReflectiveCallArgExtractor` builds a `name -> literal` map from the file's own
   `val`/`const val`/Java `static final String` declarations and accepts an identifier (optionally

@@ -99,6 +99,7 @@ Matching is by name, never by resolution - Groovy is dynamically typed, a Kotlin
 - A reflective target held in a **string constant declared in the same file** (`const val`/`val`/Java `static final String`, referenced bare or qualified as `Names.GETTER`) is resolved from that file's own declarations; the reported position stays on the call site.
 - **Not seen:** a target constant declared in *another* file (matching on the simple name across files would give wrong values for same-named constants), or a name built by concatenation/interpolation (undecidable without the compiler). An unresolvable identifier yields no hit rather than a guess.
 - **Not seen by default:** deprecations in `internal`/`utils`/`impl` packages and `Android*` classes; the banner prints how many classes were dropped and `-PfullIndex` includes them.
+- **Never seen:** deprecations outside `org.jetbrains.kotlin.*`. They belong to libraries KGP bundles, not to KGP's API, and their generic names (e.g. `kotlinx.coroutines.flow.FlowKt.merge`) match ordinary words anywhere in the monorepo. The banner's `Scope` line prints how many classes were ignored.
 
 ### Which Files Are Searched
 Both passes share one candidate search (`SourceFileFinder`): a ripgrep fast path with an in-process walk fallback when `rg` is not on the PATH. The two paths are pinned to the **same** semantic - every `.kt`/`.java` file under the scan root except `.git` - so whether `rg` happens to be installed changes only how long the scan takes, never which files it reports:

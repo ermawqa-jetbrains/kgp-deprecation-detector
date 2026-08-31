@@ -72,6 +72,7 @@ internal fun run(args: Array<String>): Int {
     }
     val index = jarIndexes.flatMap { it.symbols }
     val skippedClasses = jarIndexes.sumOf { it.skippedClasses }
+    val outOfScopeClasses = jarIndexes.sumOf { it.outOfScopeClasses }
     if (index.isEmpty()) {
         System.err.println("No @Deprecated symbols found in the KGP jars.")
         return EXIT_SETUP_FAILURE
@@ -84,6 +85,8 @@ internal fun run(args: Array<String>): Int {
         if (skippedClasses > 0) {
             appendLine("  Index    : $skippedClasses class(es) skipped (internal/utils/impl/Android) - pass -PfullIndex to include them")
         }
+        appendLine("  Scope    : ${KgpDeprecationExtractor.PACKAGE_SCOPE}.*" +
+            if (outOfScopeClasses > 0) " ($outOfScopeClasses non-KGP class(es) ignored)" else "")
         appendLine("  Allowlist: ${if (allowlist.isEmpty()) "(none)" else "${allowlist.size} entries"}")
         if (excludePatterns.isNotEmpty()) appendLine("  Excluded : ${excludePatterns.joinToString(", ")}")
         if (reportFilePath != null) appendLine("  Report   : $reportFilePath")

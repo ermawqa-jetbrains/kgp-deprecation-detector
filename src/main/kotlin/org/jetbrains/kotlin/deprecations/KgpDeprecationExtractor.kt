@@ -13,22 +13,36 @@ import java.util.jar.JarFile
  */
 object KgpDeprecationExtractor {
 
-    /** Index of one jar plus count of classes skipped by the package filter. */
-    data class JarIndex(val symbols: List<DeprecatedSymbol>, val skippedClasses: Int)
+    /** Only classes under this package are KGP API; the rest is bundled third-party code. */
+    const val PACKAGE_SCOPE = "org.jetbrains.kotlin"
+
+    /**
+     * Index of one jar, plus classes dropped by each filter: [skippedClasses] by the
+     * internal/utils/impl/Android filter, [outOfScopeClasses] by the package scope.
+     */
+    data class JarIndex(
+        val symbols: List<DeprecatedSymbol>,
+        val skippedClasses: Int,
+        val outOfScopeClasses: Int = 0,
+    )
 
     fun extract(jarPath: String, fullIndex: Boolean = false): List<DeprecatedSymbol> =
         extractIndex(jarPath, fullIndex).symbols
 
-    /**
-     * Extracts index and reports how many classes the package filter dropped.
-     */
+    /** Extracts index and reports how many classes each filter dropped. */
     fun extractIndex(jarPath: String, fullIndex: Boolean = false): JarIndex {
         val results = mutableListOf<DeprecatedSymbol>()
         var skipped = 0
+        var outOfScope = 0
 
         JarFile(jarPath).use { jar ->
             jar.entries().asSequence()
                 .filter { !it.isDirectory && it.name.endsWith(".class") }
+                .filter { entry ->
+                    val inScope = entry.name.isInPackageScope()
+                    if (!inScope) outOfScope++
+                    inScope
+                }
                 .filter { entry ->
                     val excluded = !fullIndex && entry.name.isExcluded()
                     if (excluded) skipped++
@@ -43,7 +57,7 @@ object KgpDeprecationExtractor {
                 }
         }
 
-        return JarIndex(results, skipped)
+        return JarIndex(results, skipped, outOfScope)
     }
 }
 
@@ -129,6 +143,13 @@ private class DeprecationAnnotationVisitor(
 
     override fun visitEnd() = onComplete(level, message, replaceWith)
 }
+
+/**
+ * Keeps only classes owned by the plugin. Third-party `@Deprecated` members are not KGP API and
+ * carry generic names (`kotlinx.coroutines.flow.FlowKt.merge` matched every `merge` in the repo).
+ */
+private fun String.isInPackageScope(): Boolean =
+    removeSuffix(".class").replace('/', '.').startsWith("${KgpDeprecationExtractor.PACKAGE_SCOPE}.")
 
 /**
  * Filters internal packages. Surfaced and opt-out because KGP sometimes

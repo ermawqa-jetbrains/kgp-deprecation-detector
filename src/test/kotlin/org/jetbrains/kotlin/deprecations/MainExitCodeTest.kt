@@ -143,7 +143,7 @@ class MainExitCodeTest {
     fun allowlisted_finding_succeeds() {
         System.setProperty("kgp.pluginJars", jarWithDeprecation().absolutePath)
         val allowlist = File(tmp, "allowlist.txt").apply {
-            writeText("# generic name collision\nfoo.KotlinCompilation.getDefaultSourceSetName\n")
+            writeText("# generic name collision\n$FAKE_KGP_CLASS.getDefaultSourceSetName\n")
         }
         val code = runSilently(arrayOf(rootWithDeprecatedUsage().path, allowlist.path)).first
         assertEquals(0, code)
@@ -182,12 +182,12 @@ class MainExitCodeTest {
     }
 
     private fun jarWithDeprecation(): File = jarOf(
-        "foo/KotlinCompilation.class" to deprecatedMemberClassBytes(),
+        "$FAKE_KGP_INTERNAL_NAME.class" to deprecatedMemberClassBytes(),
     )
 
     private fun deprecatedMemberClassBytes(): ByteArray {
         val cw = ClassWriter(0)
-        cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "foo/KotlinCompilation", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, FAKE_KGP_INTERNAL_NAME, null, "java/lang/Object", null)
         val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "getDefaultSourceSetName", "()Ljava/lang/String;", null, null)
         val av = mv.visitAnnotation("Lkotlin/Deprecated;", true)
         av.visit("message", "use defaultSourceSet.name")
@@ -219,5 +219,11 @@ class MainExitCodeTest {
             }
         }
         return jar
+    }
+
+    private companion object {
+        // Must live in a KGP package: the index is scoped to the plugin's own packages by default.
+        const val FAKE_KGP_INTERNAL_NAME = "org/jetbrains/kotlin/gradle/plugin/KotlinCompilation"
+        const val FAKE_KGP_CLASS = "org.jetbrains.kotlin.gradle.plugin.KotlinCompilation"
     }
 }
