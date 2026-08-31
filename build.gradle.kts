@@ -26,6 +26,7 @@ val knownProjectProperties = setOf(
     "excludePatterns",
     "reportFile",
     "fullIndex",
+    "rgPath",
 )
 
 run {
@@ -111,6 +112,10 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     findProperty("fullIndex")?.let {
         systemProperty("kgp.fullIndex", it.toString().takeIf { v -> v.isNotBlank() } ?: "true")
     }
+    // -PrgPath pins an explicit ripgrep binary, bypassing PATH (some CI runners recompute PATH
+    // internally, e.g. TeamCity's Gradle step with jdkHome set, silently dropping PATH prepends).
+    findProperty("rgPath")?.toString()?.takeIf { it.isNotBlank() }
+        ?.let { systemProperty("kgp.rgPath", it) }
 
     // Mirror output to file if -PreportFile is set
     val reportFile = findProperty("reportFile")?.toString()?.takeIf { it.isNotBlank() }

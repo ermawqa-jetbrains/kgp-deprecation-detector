@@ -29,10 +29,19 @@ internal object SourceFileFinder {
         else results.filter { f -> excludePatterns.none { pat -> f.path.contains(pat) } }
     }
 
+    /**
+     * Path/name of the `rg` executable to invoke. Defaults to bare `rg` resolved via PATH, but can
+     * be pinned to an explicit binary via `-Dkgp.rgPath=...` - relying on PATH alone is fragile in
+     * CI, since some runners (e.g. TeamCity's Gradle step with `jdkHome` set) recompute PATH
+     * internally and can silently drop custom PATH prepends.
+     */
+    private val rgExecutable: String
+        get() = System.getProperty("kgp.rgPath")?.takeIf { it.isNotBlank() } ?: "rg"
+
     /** Returns matched files, or null to trigger a walk fallback. */
     internal fun ripgrepCandidates(root: File, marker: String, fixedString: Boolean): List<File>? = try {
         val proc = ProcessBuilder(
-            "rg", "-l", "-0", "--no-messages",
+            rgExecutable, "-l", "-0", "--no-messages",
             "--no-ignore", "--hidden",
             "-g", "!.git/",
             if (fixedString) "-F" else "-e", marker,
