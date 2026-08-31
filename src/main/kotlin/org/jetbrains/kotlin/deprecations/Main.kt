@@ -56,6 +56,7 @@ internal fun run(args: Array<String>): Int {
     val excludePatterns = (defaultExcludes + userExcludes).distinct()
 
     val engineVersion = System.getProperty("kgp.engineVersion")?.takeIf { it.isNotBlank() }
+    val engineSource = System.getProperty("kgp.engineSource")?.takeIf { it.isNotBlank() }
     val jars = System.getProperty("kgp.pluginJars").orEmpty()
         .split(File.pathSeparator).filter { it.isNotBlank() }
     if (jars.isEmpty()) {
@@ -84,6 +85,7 @@ internal fun run(args: Array<String>): Int {
         appendLine("NOTE: MIGHT INCLUDE FALSE POSITIVES!")
         appendLine("  Scanning : ${scanRoot.path}")
         appendLine("  KGP      : ${engineVersion ?: "(version unknown)"} (${index.size} deprecated symbol(s) indexed)")
+        if (engineSource != null) appendLine("  Jars from: $engineSource")
         if (skippedClasses > 0) {
             appendLine("  Index    : $skippedClasses class(es) skipped (internal/utils/impl/Android) - pass -PfullIndex to include them")
         }

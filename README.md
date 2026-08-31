@@ -67,7 +67,8 @@ The detector operates in two independent passes combined with an index and a fin
 ./gradlew checkKgpDeprecations \
     -PmonorepoDir=/path/to/monorepo \
     [-Pallowlist=/path/to/allowlist.txt] \
-    [-PkgpEngineVersion=2.4.20-dev-5677] \
+    [-PkgpEngineVersion=2.5.0-dev-6260] \
+    [-PkgpBuildType=Kotlin_KotlinDev_Artifacts] \
     [-PexcludePatterns=/foo/,/bar/] \
     [-PreportFile=/path/to/report.txt] \
     [-PfullIndex] \
@@ -81,12 +82,27 @@ The detector operates in two independent passes combined with an index and a fin
 | :--- | :--- | :--- |
 | `monorepoDir` | Root directory to scan for `.kt`/`.java` files | `test-monorepo` |
 | `allowlist` | Optional file with one deprecated-symbol qualified name per line (`#` for comments). Allowlisting one declaring class suppresses the whole grouped deprecation (all sibling classes), not just that one entry. | `(none)` |
-| `kgpEngineVersion` | KGP version whose `@Deprecated` API set is indexed | `2.4.10` |
+| `kgpEngineVersion` | KGP version whose `@Deprecated` API set is indexed. A version is a **build number** of the source build (see below); `latest` takes its last successful build | `latest` |
+| `kgpBuildType` | TeamCity build configuration the KGP jars are taken from | `Kotlin_KotlinDev_Artifacts` (Kotlin Dev / Artifacts, i.e. Kotlin master) |
 | `excludePatterns` | Comma-separated path substrings to skip (added to built-in defaults) | Built-in test/fixture paths |
 | `reportFile` | Path to write the full report to. When set, stdout only prints the banner, the scan/summary counts, and a "Report is ready" pointer - the full per-finding dump goes to this file only | `build/reports/kgp-deprecations.txt` |
 | `fullIndex` | Keep `internal`/`utils`/`impl` packages and `Android*` classes in the deprecation index (more coverage, more noise) | Filtered out |
 | `rgPath` | Explicit path to the `rg` executable, bypassing `PATH`. Needed on CI runners that recompute `PATH` (TeamCity's Gradle step with `jdkHome` set silently drops `PATH` prepends) | `rg` from `PATH` |
 | `buildScan` | Publish a Develocity build scan to `ge.labs.jb.gg`. Opt-in so an offline or network-restricted CI agent does not depend on reaching it | Not published |
+
+### Where The KGP Jars Come From
+
+KGP is taken from the Kotlin build that produced it, not from a published Maven repository: a deprecation phase is prepared against KGP built from Kotlin master, before it is deployed anywhere. That build publishes its whole Maven repository as one `maven.zip` artifact, and TeamCity serves files from inside an archive, so the artifact is used as a Maven repository as is:
+
+```
+https://buildserver.labs.intellij.net/guestAuth/app/rest/builds/buildType:(id:<kgpBuildType>),number:<version>,branch:default:any/artifacts/content/maven.zip!/
+```
+
+Consequences worth knowing:
+- **A version is a build number** (`2.5.0-dev-6260`), so a released version such as `2.4.10` is not a valid input - the build then fails at configuration time with a link to the build configuration instead of an unresolved-dependency error.
+- **No default version is hard-coded** - a build's artifacts are cleaned up over time, so any pinned default would rot; `latest` asks TeamCity for the last successful build on every run.
+- **The JetBrains network is required** (guest access, no credentials). Unit tests do not need it; only `checkKgpDeprecations` resolves the jars.
+- **Another branch** can be indexed with `-PkgpBuildType=<that branch's Artifacts build id>`.
 
 `monorepoDir` is resolved against the project directory and validated at **configuration** time: a path that is not an existing directory fails the build before the JVM starts (a truncated absolute path used to be caught only after startup). The check task always runs (`outputs.upToDateWhen { false }`) - a checker must never be skipped as up-to-date.
 
@@ -143,7 +159,8 @@ Nobody has to clone the IntelliJ monorepo to get a report: the scan runs as
 
 - **Manual runs only** - there is no trigger; press *Run* when a deprecation phase is being prepared.
 - **What it scans** - the `intellij-kt-master` VCS root, checked out by TeamCity, so the report always reflects IntelliJ master.
-- **KGP version** - the `kgp.engine.version` build parameter (default `2.4.10`); override it in the *Run…* dialog to index another KGP.
+- **KGP version** - the `kgp.engine.version` build parameter (default `latest`, the last successful build of the source build); override it in the *Run…* dialog with a build number to index a specific KGP.
+- **Where KGP comes from** - the `kgp.build.type` build parameter (default `Kotlin_KotlinDev_Artifacts`); point it at a release branch's Artifacts build to index that branch instead of master.
 - **Where the result is** - the build log holds the banner and the summary line; the full per-finding report is the `kgp-deprecations-report.txt` artifact, published even when the build is red.
 - **Red build** - `ERROR`/`HIDDEN` findings exist (exit 1), i.e. the check did its job. A setup failure (exit 2) is reported with a different message.
 - **ripgrep** - a build step caches a pinned `rg` under `$HOME/.cache/kgp-detector/`, and the Gradle step passes it via `-PrgPath`; if the download fails, the scan still runs on the walk fallback.

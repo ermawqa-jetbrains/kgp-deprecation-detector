@@ -227,6 +227,26 @@ Pass 2 (reflective calls):
   graph, so `./gradlew help` never resolves the configuration). It must NOT be a `Provider`:
   `JavaExec.systemProperty` does not unwrap one and passes its `toString()` through, which the
   tool then reports as `Failed to read KGP jar 'map(provider(...))'`.
+- **KGP jars come from a TeamCity build, not from a published Maven repository.** The scan is run
+  while a deprecation phase is being prepared, i.e. against KGP built from Kotlin master before it
+  is deployed anywhere, so `packages.jetbrains.team/maven/p/kt/dev` was replaced by the
+  `maven.zip` artifact of `-PkgpBuildType` (default `Kotlin_KotlinDev_Artifacts`), which TeamCity
+  serves from inside the archive (`.../artifacts/content/maven.zip!/`) over guest auth — no
+  credentials, but the JetBrains network is required. Consequences that are easy to break:
+  - **A version IS a build number** (`2.5.0-dev-6260`); a released version like `2.4.10` does not
+    exist there. That is checked against the REST API up front, so the user gets "no build
+    numbered X, pick one at <url>" instead of "Could not find kotlin-gradle-plugin:2.4.10".
+  - **No default version is hard-coded** — a build's artifacts are cleaned up, so a pinned default
+    would rot. `latest` (the default) asks TeamCity for the last successful build.
+  - **The lookup is a `ValueSource`**, not a plain `URL.readText()`: the configuration cache
+    re-evaluates it on every run, so `latest` cannot stay pinned to yesterday's build on an agent
+    that reuses its checkout. It also has connect/read timeouts.
+  - **An unresolvable version fails the *task*, not the configuration** (`versionProblem` is
+    thrown inside `tasks.register`): `./gradlew build` (unit tests, pure offline ASM) must keep
+    working without TeamCity.
+  - **The repository is `exclusiveContent`-scoped** to `org.jetbrains.kotlin*` at exactly that
+    version, so mavenCentral keeps serving everything else (ASM, `kotlin-test`, the build's own
+    stdlib) and no lookup for that version leaks to mavenCentral.
 - **`jvmToolchain(21)` is pinned.** The tool reads bytecode with ASM; "whatever JDK is on PATH"
   made local runs (JDK 26 here) and CI compile to different bytecode with a different behaviour
   surface. 21 is also what the TeamCity step runs (`jdkHome = "%env.JDK_21_0%"`).
@@ -241,8 +261,10 @@ Pass 2 (reflective calls):
   names, one per line, with `#` starting a comment; every entry must be preceded by a `#` comment
   explaining why it is a false positive. Pinned by `AllowlistTest`, which fails on an entry with
   no preceding comment. No other structure (owner, KGP version header, etc.) is enforced.
-- **The banner stays minimal.** It records what was scanned, the KGP version and the allowlist —
-  nothing else. A `Tool : <git describe>` revision line was added once for CI traceability and
+- **The banner stays minimal.** It records what was scanned, the KGP version, where its jars came
+  from (`Jars from: TeamCity <build type>` — not implicit any more, now that the source is a build
+  configuration and a version is its build number) and the allowlist — nothing else.
+  A `Tool : <git describe>` revision line was added once for CI traceability and
   removed again: the check runs once per branching/deprecation phase and is read by developers,
   so extra header noise costs more than it gives.
 - **Allowlist entries are qualified names** (`Finding.symbol`, e.g.
@@ -265,13 +287,13 @@ Pass 2 (reflective calls):
 ## Build / test / run
 
 ```bash
-./gradlew build                          # compile + unit tests (no Gradle/network)
+./gradlew build                          # compile + unit tests (offline ASM; TeamCity not required)
 ./gradlew checkKgpDeprecations           # run against bundled test-monorepo fixture
 ./gradlew checkKgpDeprecations -PmonorepoDir=<path> -Pallowlist=<file>
 ```
 
-Flags: `-Pallowlist` `-PkgpEngineVersion` `-PexcludePatterns` `-PreportFile` `-PfullIndex`
-`-PrgPath` `-PbuildScan`. See README.
+Flags: `-Pallowlist` `-PkgpEngineVersion` `-PkgpBuildType` `-PexcludePatterns` `-PreportFile`
+`-PfullIndex` `-PrgPath` `-PbuildScan`. See README.
 
 ## Repo
 
