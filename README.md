@@ -71,6 +71,7 @@ The detector operates in two independent passes combined with an index and a fin
     [-PexcludePatterns=/foo/,/bar/] \
     [-PreportFile=/path/to/report.txt] \
     [-PfullIndex] \
+    [-PrgPath=/path/to/rg] \
     [-PbuildScan]
 ```
 
@@ -84,11 +85,12 @@ The detector operates in two independent passes combined with an index and a fin
 | `excludePatterns` | Comma-separated path substrings to skip (added to built-in defaults) | Built-in test/fixture paths |
 | `reportFile` | Path to write the full report to. When set, stdout only prints the banner, the scan/summary counts, and a "Report is ready" pointer - the full per-finding dump goes to this file only | `build/reports/kgp-deprecations.txt` |
 | `fullIndex` | Keep `internal`/`utils`/`impl` packages and `Android*` classes in the deprecation index (more coverage, more noise) | Filtered out |
+| `rgPath` | Explicit path to the `rg` executable, bypassing `PATH`. Needed on CI runners that recompute `PATH` (TeamCity's Gradle step with `jdkHome` set silently drops `PATH` prepends) | `rg` from `PATH` |
 | `buildScan` | Publish a Develocity build scan to `ge.labs.jb.gg`. Opt-in so an offline or network-restricted CI agent does not depend on reaching it | Not published |
 
 `monorepoDir` is resolved against the project directory and validated at **configuration** time: a path that is not an existing directory fails the build before the JVM starts (a truncated absolute path used to be caught only after startup). The check task always runs (`outputs.upToDateWhen { false }`) - a checker must never be skipped as up-to-date.
 
-The build pins `jvmToolchain(17)`, so the tool compiles and runs against the same JDK locally and in CI.
+The build pins `jvmToolchain(21)`, so the tool compiles and runs against the same JDK locally and in CI.
 
 Unknown `-P` properties fail the build at configuration time (with a "did you mean" suggestion for near-misses). Gradle itself ignores unrecognised `-P` flags, so a typo such as `-PmonrepoDir=<path>` would otherwise silently scan the default `test-monorepo` fixture and report a clean run.
 
@@ -113,8 +115,14 @@ Drops test fixtures, test sources, and known false positives:
 `/testData/`, `/testdata/`, `/testResources/`, `/testSources/`, `/testSrc/`, `/test/`, `/tests/`, `/integration-tests/`, `/agpIntegrationTestSrc/`, `/resources/`, `/privacy/KotlinNotebookSystemPromptPrivacySafeWrapper.kt`, `/fleet/buildtool/bundles/helpers.kt`.
 
 ### Allowlist Rules
+The curated list for the IntelliJ monorepo is `config/allowlist-intellij.txt`; it is versioned here and changed by merge request, so a suppression is reviewable instead of living on someone's machine.
+
 An allowlist entry suppresses a finding permanently, so it must stay auditable:
 - **A reason per entry.** Every entry is preceded by a `#` comment explaining why it is a false positive; an unexplained entry cannot be re-verified later. Pinned by `AllowlistTest`.
+- **One entry per deprecated API.** An entry is a qualified `<class>.<member>` name, and allowlisting a single declaring class suppresses the whole grouped deprecation - every sibling class the report lists under `Declared in: ...`.
+- **Never list `$DefaultImpls` classes or non-KGP packages.** Neither is indexed, so such an entry can never match anything.
+
+For a one-off experiment, point `-Pallowlist` at a scratch file instead of editing the shared one.
 
 ### Exit Codes
 - **`0`** - Clean or `WARNING`-only matches (warnings reported but do not fail the build).
@@ -124,6 +132,23 @@ An allowlist entry suppresses a finding permanently, so it must stay auditable:
 Gradle collapses any non-zero exit into its own generic failure, so `checkKgpDeprecations` inspects the code itself and fails with a distinguishable message:
 - `1` → `KGP deprecation check FAILED: deprecated API usages found.`
 - `2` → `KGP deprecation check DID NOT RUN (setup failure, exit 2).`
+
+---
+
+## Running It In TeamCity
+
+Nobody has to clone the IntelliJ monorepo to get a report: the scan runs as
+**Kotlin Infrastructure → KGP Deprecation Detector → Scan IntelliJ monorepo**
+(`.teamcity/infra/subprojects/kgpDeprecationDetector/`).
+
+- **Manual runs only** - there is no trigger; press *Run* when a deprecation phase is being prepared.
+- **What it scans** - the `intellij-kt-master` VCS root, checked out by TeamCity, so the report always reflects IntelliJ master.
+- **KGP version** - the `kgp.engine.version` build parameter (default `2.4.10`); override it in the *Run…* dialog to index another KGP.
+- **Where the result is** - the build log holds the banner and the summary line; the full per-finding report is the `kgp-deprecations-report.txt` artifact, published even when the build is red.
+- **Red build** - `ERROR`/`HIDDEN` findings exist (exit 1), i.e. the check did its job. A setup failure (exit 2) is reported with a different message.
+- **ripgrep** - a build step caches a pinned `rg` under `$HOME/.cache/kgp-detector/`, and the Gradle step passes it via `-PrgPath`; if the download fails, the scan still runs on the walk fallback.
+
+Detector code, allowlist and build configuration live in the same repository, so one merge request changes all three, and the run's VCS revision *is* the detector version.
 
 ---
 

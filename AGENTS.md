@@ -202,6 +202,11 @@ Pass 2 (reflective calls):
   narrower than the extractor's would silently lose candidates. `EmbeddedScriptExtractor` now
   builds its `Regex` directly from `EmbeddedScriptFinder.MARKER` instead of its own copy. Pinned
   by `EmbeddedScriptMarkerTest`.
+- **`-PrgPath` exists because PATH is not reliable on CI.** `SourceFileFinder` invokes
+  `System.getProperty("kgp.rgPath")` and only falls back to a bare `rg`. TeamCity's Gradle runner
+  recomputes PATH internally when `jdkHome` is set, so an `env.PATH` prepend was silently dropped
+  and every CI run degraded to the walk fallback while the preceding step reported `rg` as cached.
+  Pass the executable, don't hope for PATH.
 - **The ripgrep path catches `Exception`, not just `IOException`, and redirects stderr.** A
   missing `rg` throws `IOException`, but a `SecurityException` or an interrupted `waitFor` used
   to kill the whole run instead of degrading to the walk; `redirectErrorStream(true)` removes the
@@ -222,9 +227,9 @@ Pass 2 (reflective calls):
   graph, so `./gradlew help` never resolves the configuration). It must NOT be a `Provider`:
   `JavaExec.systemProperty` does not unwrap one and passes its `toString()` through, which the
   tool then reports as `Failed to read KGP jar 'map(provider(...))'`.
-- **`jvmToolchain(17)` is pinned.** The tool reads bytecode with ASM; "whatever JDK is on PATH"
-  made local runs (JDK 26 here) and CI (17/21) compile to different bytecode with a different
-  behaviour surface.
+- **`jvmToolchain(21)` is pinned.** The tool reads bytecode with ASM; "whatever JDK is on PATH"
+  made local runs (JDK 26 here) and CI compile to different bytecode with a different behaviour
+  surface. 21 is also what the TeamCity step runs (`jdkHome = "%env.JDK_21_0%"`).
 - **The Develocity build scan is opt-in**: the plugin is declared `apply false` and applied only
   when `-PbuildScan` is present (registered in `knownProjectProperties`). Publishing on every
   build made the check depend on reaching `ge.labs.jb.gg`, which an offline/network-restricted CI
@@ -266,11 +271,21 @@ Pass 2 (reflective calls):
 ```
 
 Flags: `-Pallowlist` `-PkgpEngineVersion` `-PexcludePatterns` `-PreportFile` `-PfullIndex`
-`-PbuildScan`. See
-README.
+`-PrgPath` `-PbuildScan`. See README.
 
 ## Repo
 
-`main` is mirror-pushed to **both** JetBrains Space (primary, `git.jetbrains.team/kqa/...`) and a
-GitHub mirror via two push URLs on `origin`. A plain `git push` writes to both. Keep Space's own
-outgoing GitHub mirror **disabled** (it blocks pushes). `main` is protected — no force-push.
+The tool lives inside **`kotlin-infrastructure`** (`kgp-deprecation-detector/`), next to the other
+vendored tools (`publishing-utils`, `github-commands`, …). It is a standalone nested Gradle build:
+its own `settings.gradle.kts` and wrapper, deliberately *not* listed in the root
+`settings.gradle.kts`. The public GitHub repository it was imported from is history only — changes
+made there are invisible to CI.
+
+- Changes go to `master` by merge request; the repo-wide quality gate runs `./gradlew ktlintCheck`
+  from the root, and its default patterns (`**/*.kt`, `**/*.kts`) **include this directory** — a
+  missing final newline in `settings.gradle.kts` failed it once.
+- The TeamCity configuration is `.teamcity/infra/subprojects/kgpDeprecationDetector/`, registered
+  in `Kotlin_Service.kt`. One commit can change the tool, its allowlist and its build config; the
+  run's VCS revision is the detector version.
+- Settings are generated on JDK 21 (`mvn process-sources teamcity-configs:generate@kotlin-service`
+  inside `.teamcity`); a newer JDK breaks the Kotlin 2.0.21 Maven compiler.
