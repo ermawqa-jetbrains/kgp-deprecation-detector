@@ -5,6 +5,11 @@
 #
 # Every entry must be preceded by a '#' comment giving the reason it is a false positive.
 # An unexplained entry cannot be re-verified by anyone else later (enforced by AllowlistTest).
+#
+# One entry per deprecated API is enough: allowlisting a single declaring class suppresses the
+# whole grouped deprecation (every sibling class the report lists under 'Declared in: ...').
+# Do not list '$DefaultImpls' classes - they are never indexed. Same for non-KGP packages:
+# only 'org.jetbrains.kotlin.*' is indexed, so third-party symbols cannot be reported.
 
 # "create" collides with the generic TaskContainer.create(...) call
 org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreApplicationEnvironment$Companion.create
@@ -18,31 +23,15 @@ org.jetbrains.kotlin.gradle.targets.web.nodejs.BaseNodeJsRootExtension.getVersio
 # "getProject" collides with the lambda parameter name `project`
 org.jetbrains.kotlin.gradle.plugin.mpp.external.ExternalKotlinTargetApiExtensionsKt.getProject
 
-# "merge" collides with plain English inside a doc/error-message string
-kotlinx.coroutines.flow.FlowKt.merge
-kotlinx.coroutines.flow.FlowKt__MigrationKt.merge
-
-# "compose" collides with the unrelated Compose Gradle plugin DSL (compose.desktop.application {})
-kotlinx.coroutines.flow.FlowKt.compose
-kotlinx.coroutines.flow.FlowKt__MigrationKt.compose
-
 # "getTarget" collides with the lambda variable name `target`
-org.jetbrains.kotlin.gradle.dsl.KotlinJsOptions$DefaultImpls.getTarget
+org.jetbrains.kotlin.gradle.dsl.KotlinJsOptions.getTarget
 org.jetbrains.kotlin.gradle.dsl.KotlinJsProjectExtension.getTarget
 
-# "getCompilation" collides with the lambda variable name `compilation`
-# org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink.getCompilation
-
 # "getMain" collides with a generic `main = ...` variable assignment
-org.jetbrains.kotlin.gradle.dsl.KotlinJsOptions$DefaultImpls.getMain
-
-# "catch" collides with ordinary try/catch blocks
-kotlinx.coroutines.flow.LintKt.catch
+org.jetbrains.kotlin.gradle.dsl.KotlinJsOptions.getMain
 
 # "dependencies" collides with the plain top-level Gradle dependencies {} block
 org.jetbrains.kotlin.gradle.plugin.KotlinCompilation.dependencies
-org.jetbrains.kotlin.gradle.plugin.mpp.DecoratedKotlinCompilation.dependencies
-org.jetbrains.kotlin.gradle.plugin.mpp.compilationImpl.KotlinCompilationImpl.dependencies
 
 # "getCurrent" collides with GradleVersion.current()
 org.jetbrains.kotlin.konan.target.Xcode$Companion.getCurrent

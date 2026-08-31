@@ -115,7 +115,15 @@ internal fun run(args: Array<String>): Int {
         reflectiveScanner.scan(ReflectiveCallArgExtractor.extract(file), file.path)
     }.toList().flatten()
 
-    val findings = (embeddedFindings + reflectiveFindings).filterNot { it.symbol in allowlist }
+    val allFindings = embeddedFindings + reflectiveFindings
+    // Allowlisting one declaring class of a hierarchy (e.g. only 'KotlinCompile.kotlinOptions')
+    // suppresses the whole logical deprecation, not just that one sibling class - otherwise a
+    // developer would have to enumerate every class the report groups under 'Declared in: ...'.
+    val allowlistedGroups = allFindings
+        .filter { it.symbol in allowlist }
+        .map { it.deprecationId to it.message }
+        .toSet()
+    val findings = allFindings.filterNot { (it.deprecationId to it.message) in allowlistedGroups }
     // One call site of an inherited/default member matches every class of the hierarchy that
     // declares it; counts and the exit gate must see it as a single usage.
     val usages = findings.distinctBy { listOf(it.file, it.line, it.column, it.deprecationId, it.message) }

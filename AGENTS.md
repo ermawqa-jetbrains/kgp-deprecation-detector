@@ -168,7 +168,15 @@ Pass 2 (reflective calls):
   (file, line, column, deprecationId, message) before the summary and the exit gate, and each report
   section lists the declaring classes (`Declared in: <qualified>, +N more` - qualified because an
   allowlist entry is `<class>.<member>`). The `$DefaultImpls` skip is counted and printed as the
-  banner's `Synthetic` line; allowlist matching still uses the full `Finding.symbol`.
+  banner's `Synthetic` line.
+- **Allowlisting one declaring class suppresses the whole group.** A finding is still matched by
+  its full `Finding.symbol` (`<class>.<member>`), but before building the report, `Main` computes
+  `allowlistedGroups`: the `(deprecationId, message)` of every finding whose `symbol` is in the
+  allowlist. Any finding whose `(deprecationId, message)` is in that set is dropped, regardless of
+  which sibling class it was declared in. So one allowlist entry (e.g.
+  `org.jetbrains.kotlin.gradle.dsl.KotlinCompile.kotlinOptions`) suppresses the same call site
+  reported under `KotlinJvmCompile`, `KotlinCompilation`, etc. - matching the "one call site, one
+  entry" expectation created by the report grouping, with no allowlist file format change.
 - **Pass 2 resolves same-file string constants (Tier 1), and only those.**
   `ReflectiveCallArgExtractor` builds a `name -> literal` map from the file's own
   `val`/`const val`/Java `static final String` declarations and accepts an identifier (optionally

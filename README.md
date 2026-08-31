@@ -79,7 +79,7 @@ The detector operates in two independent passes combined with an index and a fin
 | Parameter | Description | Default |
 | :--- | :--- | :--- |
 | `monorepoDir` | Root directory to scan for `.kt`/`.java` files | `test-monorepo` |
-| `allowlist` | Optional file with one deprecated-symbol qualified name per line (`#` for comments) | `(none)` |
+| `allowlist` | Optional file with one deprecated-symbol qualified name per line (`#` for comments). Allowlisting one declaring class suppresses the whole grouped deprecation (all sibling classes), not just that one entry. | `(none)` |
 | `kgpEngineVersion` | KGP version whose `@Deprecated` API set is indexed | `2.4.10` |
 | `excludePatterns` | Comma-separated path substrings to skip (added to built-in defaults) | Built-in test/fixture paths |
 | `reportFile` | Path to write the full report to. When set, stdout only prints the banner, the scan/summary counts, and a "Report is ready" pointer - the full per-finding dump goes to this file only | `build/reports/kgp-deprecations.txt` |
