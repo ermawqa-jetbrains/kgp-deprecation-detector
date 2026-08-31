@@ -82,7 +82,7 @@ The detector operates in two independent passes combined with an index and a fin
 | `allowlist` | Optional file with one deprecated-symbol qualified name per line (`#` for comments) | `(none)` |
 | `kgpEngineVersion` | KGP version whose `@Deprecated` API set is indexed | `2.4.10` |
 | `excludePatterns` | Comma-separated path substrings to skip (added to built-in defaults) | Built-in test/fixture paths |
-| `reportFile` | Path to mirror stdout/stderr output for CI artifacts | `build/reports/kgp-deprecations.txt` |
+| `reportFile` | Path to write the full report to. When set, stdout only prints the banner, the scan/summary counts, and a "Report is ready" pointer - the full per-finding dump goes to this file only | `build/reports/kgp-deprecations.txt` |
 | `fullIndex` | Keep `internal`/`utils`/`impl` packages and `Android*` classes in the deprecation index (more coverage, more noise) | Filtered out |
 | `buildScan` | Publish a Develocity build scan to `ge.labs.jb.gg`. Opt-in so an offline or network-restricted CI agent does not depend on reaching it | Not published |
 

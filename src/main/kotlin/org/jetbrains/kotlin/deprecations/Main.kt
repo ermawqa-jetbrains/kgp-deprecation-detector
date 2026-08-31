@@ -1,9 +1,6 @@
 package org.jetbrains.kotlin.deprecations
 
 import java.io.File
-import java.io.FileOutputStream
-import java.io.OutputStream
-import java.io.PrintStream
 import kotlin.system.exitProcess
 
 /**
@@ -26,8 +23,7 @@ internal const val EXIT_FINDINGS = 1
 internal const val EXIT_SETUP_FAILURE = 2
 
 internal fun run(args: Array<String>): Int {
-    // Mirror output to file if -PreportFile is set
-    val reportFilePath = setUpReportFileTee()
+    val reportFilePath = System.getProperty("kgp.reportFile")?.takeIf { it.isNotBlank() }
 
     if (args.isEmpty() || args[0].isBlank()) {
         printHelpUsage()
@@ -81,15 +77,18 @@ internal fun run(args: Array<String>): Int {
         return EXIT_SETUP_FAILURE
     }
 
-    println("KGP DEPRECATION CHECK")
-    println("  Scanning : ${scanRoot.path}")
-    println("  KGP      : ${engineVersion ?: "(version unknown)"} (${index.size} deprecated symbol(s) indexed)")
-    if (skippedClasses > 0) {
-        println("  Index    : $skippedClasses class(es) skipped (internal/utils/impl/Android) - pass -PfullIndex to include them")
+    val banner = buildString {
+        appendLine("KGP DEPRECATION CHECK")
+        appendLine("  Scanning : ${scanRoot.path}")
+        appendLine("  KGP      : ${engineVersion ?: "(version unknown)"} (${index.size} deprecated symbol(s) indexed)")
+        if (skippedClasses > 0) {
+            appendLine("  Index    : $skippedClasses class(es) skipped (internal/utils/impl/Android) - pass -PfullIndex to include them")
+        }
+        appendLine("  Allowlist: ${if (allowlist.isEmpty()) "(none)" else "${allowlist.size} entries"}")
+        if (excludePatterns.isNotEmpty()) appendLine("  Excluded : ${excludePatterns.joinToString(", ")}")
+        if (reportFilePath != null) appendLine("  Report   : $reportFilePath")
     }
-    println("  Allowlist: ${if (allowlist.isEmpty()) "(none)" else "${allowlist.size} entries"}")
-    if (excludePatterns.isNotEmpty()) println("  Excluded : ${excludePatterns.joinToString(", ")}")
-    if (reportFilePath != null) println("  Report   : $reportFilePath")
+    print(banner)
     println()
 
     /** SCAN 1: Embedded scripts */
@@ -110,9 +109,32 @@ internal fun run(args: Array<String>): Int {
 
     val findings = (embeddedFindings + reflectiveFindings).filterNot { it.symbol in allowlist }
 
-    println("Scanned ${candidates.size} embedded-script candidate file(s), ${reflectiveCandidates.size} reflective-call candidate file(s).")
-    println()
-    report(findings)
+    val scannedLine = "Scanned ${candidates.size} embedded-script candidate file(s), ${reflectiveCandidates.size} reflective-call candidate file(s)."
+    val summaryLine = reportSummaryLine(findings)
+
+    if (reportFilePath != null) {
+        println(scannedLine)
+        println()
+        println("Generating report...")
+        writeReportFile(
+            reportFilePath,
+            buildString {
+                append(banner)
+                appendLine()
+                appendLine(scannedLine)
+                appendLine()
+                appendLine(summaryLine)
+                if (findings.isNotEmpty()) append(reportDetails(findings))
+            },
+        )
+        println(summaryLine)
+        println("Report is ready, check in: $reportFilePath")
+    } else {
+        println(scannedLine)
+        println()
+        println(summaryLine)
+        if (findings.isNotEmpty()) print(reportDetails(findings))
+    }
 
     val errors = findings.count { it.level == DeprecationLevel.ERROR }
     val hidden = findings.count { it.level == DeprecationLevel.HIDDEN }
@@ -127,17 +149,10 @@ internal fun run(args: Array<String>): Int {
     }
 }
 
-private fun setUpReportFileTee(): String? {
-    val reportFilePath = System.getProperty("kgp.reportFile")?.takeIf { it.isNotBlank() }
-    reportFilePath?.let { path ->
-        val reportFile = File(path)
-        reportFile.parentFile?.mkdirs()
-        val fileStream = FileOutputStream(reportFile)
-        System.setOut(PrintStream(TeeOutputStream(System.out, fileStream), true))
-        System.setErr(PrintStream(TeeOutputStream(System.err, fileStream), true))
-        Runtime.getRuntime().addShutdownHook(Thread { fileStream.flush(); fileStream.close() })
-    }
-    return reportFilePath
+private fun writeReportFile(path: String, content: String) {
+    val reportFile = File(path)
+    reportFile.parentFile?.mkdirs()
+    reportFile.writeText(content)
 }
 
 private fun loadAllowlist(file: File): Set<String>? {
@@ -151,59 +166,42 @@ private fun loadAllowlist(file: File): Set<String>? {
         .toSet()
 }
 
-private fun report(findings: List<Finding>) {
+private fun reportSummaryLine(findings: List<Finding>): String {
     if (findings.isEmpty()) {
-        println("No deprecated API usages found in embedded scripts or reflective calls.")
-        return
+        return "No deprecated API usages found in embedded scripts or reflective calls."
     }
     val affected = findings.map { it.file }.toSet().size
     val breakdown = listOf(DeprecationLevel.ERROR, DeprecationLevel.HIDDEN, DeprecationLevel.WARNING)
         .associateWith { level -> findings.count { it.level == level } }
         .filterValues { it > 0 }
         .entries.joinToString(", ") { (level, count) -> "$count ${level.name}" }
-    println("${findings.size} usage(s) in $affected file(s): $breakdown match(es).")
-    println("------------------------------------------------------------")
+    return "${findings.size} usage(s) in $affected file(s): $breakdown match(es)."
+}
 
+private fun reportDetails(findings: List<Finding>): String = buildString {
+    appendLine("------------------------------------------------------------")
     for (level in listOf(DeprecationLevel.ERROR, DeprecationLevel.HIDDEN, DeprecationLevel.WARNING)) {
         val bucket = findings.filter { it.level == level }
         if (bucket.isEmpty()) continue
         bucket.groupBy { it.symbol }.forEach { (symbol, usages) ->
-            println()
-            println("[${level.name}] $symbol")
-            println("  Reason: ${usages.first().message}")
-            println("  Hits  : ${usages.size}")
+            appendLine()
+            appendLine("[${level.name}] $symbol")
+            appendLine("  Reason: ${usages.first().message}")
+            appendLine("  Hits  : ${usages.size}")
             usages.forEach { f ->
                 // Absolute path for IDE click-to-open
-                println("    ${f.file}:${f.line}:${f.column}")
-                sourceLineWithCaret(f)?.forEach { println("      $it") }
+                appendLine("    ${f.file}:${f.line}:${f.column}")
+                sourceLineWithCaret(f)?.forEach { appendLine("      $it") }
             }
         }
     }
-    println("------------------------------------------------------------")
+    appendLine("------------------------------------------------------------")
 }
 
 private fun sourceLineWithCaret(finding: Finding): List<String>? {
     val line = runCatching { File(finding.file).readLines().getOrNull(finding.line - 1) }.getOrNull() ?: return null
     val caret = " ".repeat((finding.column - 1).coerceAtLeast(0)) + "^"
     return listOf(line, caret)
-}
-
-/** Mirrors output to two streams. */
-private class TeeOutputStream(private val a: OutputStream, private val b: OutputStream) : OutputStream() {
-    override fun write(byte: Int) {
-        a.write(byte)
-        b.write(byte)
-    }
-
-    override fun write(buf: ByteArray, off: Int, len: Int) {
-        a.write(buf, off, len)
-        b.write(buf, off, len)
-    }
-
-    override fun flush() {
-        a.flush()
-        b.flush()
-    }
 }
 
 private fun printHelpUsage() {
