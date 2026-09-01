@@ -248,9 +248,9 @@ internal fun executiveSummary(usages: List<Finding>): String = buildString {
     val errors = usages.count { it.level == DeprecationLevel.ERROR }
     val hidden = usages.count { it.level == DeprecationLevel.HIDDEN }
     val warnings = usages.count { it.level == DeprecationLevel.WARNING }
-    if (errors > 0) appendLine("  • ERROR  : $errors (fails build / action required)")
-    if (hidden > 0) appendLine("  • HIDDEN : $hidden (removed API / action required)")
-    if (warnings > 0) appendLine("  • WARNING: $warnings (advisory / future removal)")
+    if (errors > 0) appendLine("  - ERROR  : $errors (fails build / action required)")
+    if (hidden > 0) appendLine("  - HIDDEN : $hidden (removed API / action required)")
+    if (warnings > 0) appendLine("  - WARNING: $warnings (advisory / future removal)")
 }
 
 internal data class QuickIndexEntry(
