@@ -38,3 +38,6 @@ org.jetbrains.kotlin.konan.target.Xcode$Companion.getCurrent
 
 # "getStatic" collides with the Java `static` keyword modifier
 org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig$DevServer.getStatic
+
+# "getTargets" on KotlinJsProjectExtension is marked HIDDEN by KGP specifically for IDE MPP import
+org.jetbrains.kotlin.gradle.dsl.KotlinJsProjectExtension.getTargets
