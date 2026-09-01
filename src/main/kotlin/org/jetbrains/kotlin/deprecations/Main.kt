@@ -160,6 +160,20 @@ internal fun run(args: Array<String>): Int {
     val errors = usages.count { it.level == DeprecationLevel.ERROR }
     val hidden = usages.count { it.level == DeprecationLevel.HIDDEN }
 
+    val isTeamCity = isRunningOnTeamCity()
+    if (isTeamCity) {
+        println("##teamcity[buildStatus text='${escapeTc(summaryLine)}']")
+        if (errors > 0 || hidden > 0) {
+            val reportFileName = reportFilePath?.let { File(it).name }
+            val problemDescription = if (reportFileName != null) {
+                "KGP deprecation check FAILED: $summaryLine Check artifact '$reportFileName'."
+            } else {
+                "KGP deprecation check FAILED: $summaryLine"
+            }
+            println("##teamcity[buildProblem description='${escapeTc(problemDescription)}' identity='kgpDeprecations']")
+        }
+    }
+
     // WARNING passes; ERROR/HIDDEN fails
     return if (errors > 0 || hidden > 0) {
         System.err.println("Result: FAIL")
@@ -167,6 +181,18 @@ internal fun run(args: Array<String>): Int {
     } else {
         println("Result: OK")
         0
+    }
+}
+
+internal fun isRunningOnTeamCity(): Boolean =
+    !System.getenv("TEAMCITY_VERSION").isNullOrBlank() ||
+        !System.getProperty("teamcity.version").isNullOrBlank()
+
+internal fun escapeTc(text: String): String = text.replace(Regex("""[|'\[\]\n\r]""")) {
+    when (it.value) {
+        "\n" -> "|n"
+        "\r" -> "|r"
+        else -> "|${it.value}"
     }
 }
 

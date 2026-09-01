@@ -197,6 +197,12 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     findProperty("rgPath")?.toString()?.takeIf { it.isNotBlank() }
         ?.let { systemProperty("kgp.rgPath", it) }
 
+    // Forward TeamCity detection if present
+    findProperty("teamcity.version")?.toString()?.takeIf { it.isNotBlank() }
+        ?.let { systemProperty("teamcity.version", it) }
+    System.getenv("TEAMCITY_VERSION")?.takeIf { it.isNotBlank() }
+        ?.let { systemProperty("teamcity.version", it) }
+
     // Mirror output to file if -PreportFile is set
     val reportFile = findProperty("reportFile")?.toString()?.takeIf { it.isNotBlank() }
         ?: layout.buildDirectory.file("reports/kgp-deprecations.txt").get().asFile.path
@@ -206,6 +212,10 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     val allowlistArg = findProperty("allowlist")?.toString().orEmpty()
     args = listOf(monorepo, allowlistArg)
 
+    val isTeamCity = !System.getenv("TEAMCITY_VERSION").isNullOrBlank() ||
+        !System.getProperty("teamcity.version").isNullOrBlank() ||
+        findProperty("teamcity.version")?.toString()?.isNotBlank() == true
+
     // Gradle turns any non-zero exit into its own generic failure, hiding the
     // tool's 1 (findings) vs 2 (setup failure) distinction. Inspect it ourselves.
     isIgnoreExitValue = true
@@ -213,9 +223,20 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     doLast {
         when (val code = result.get().exitValue) {
             0 -> Unit
-            1 -> throw GradleException(
-                "KGP deprecation check FAILED: deprecated API usages found. See the report above."
-            )
+            1 -> {
+                if (isTeamCity) {
+                    // On TeamCity, Main.kt already emitted ##teamcity[buildProblem ...] and
+                    // ##teamcity[buildStatus ...]. Throwing a GradleException here would cause
+                    // TeamCity's Gradle runner to fail with a 100-line Tooling API stack trace
+                    // and register a redundant second build problem ("Process exited with code 1").
+                    // By completing cleanly, TeamCity marks the build as failed solely due to the
+                    // buildProblem service message without any stack trace noise.
+                } else {
+                    throw GradleException(
+                        "KGP deprecation check FAILED: deprecated API usages found. See the report above."
+                    )
+                }
+            }
             2 -> throw GradleException(
                 "KGP deprecation check DID NOT RUN (setup failure, exit 2). " +
                     "The check produced no verdict - fix the invocation and re-run."

@@ -12,6 +12,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 /**
  * Pins the exit-code contract: 0 (clean), 1 (findings), 2 (setup failure).
@@ -20,7 +21,7 @@ class MainExitCodeTest {
 
     private val tmp: File = createTempDirectory("kgp-exit-code").toFile()
     private val properties =
-        listOf("kgp.pluginJars", "kgp.engineVersion", "kgp.excludePatterns", "kgp.fullIndex")
+        listOf("kgp.pluginJars", "kgp.engineVersion", "kgp.excludePatterns", "kgp.fullIndex", "kgp.reportFile", "teamcity.version")
     private val savedProperties = properties.associateWith { System.getProperty(it) }
 
     @AfterTest
@@ -149,17 +150,72 @@ class MainExitCodeTest {
         assertEquals(0, code)
     }
 
+    @Test
+    fun teamcity_environment_emits_build_status_and_problem_on_findings() {
+        System.setProperty("kgp.pluginJars", jarWithDeprecation().absolutePath)
+        System.setProperty("teamcity.version", "2024.1")
+        val reportFile = File(tmp, "kgp-deprecations-report.txt")
+        System.setProperty("kgp.reportFile", reportFile.path)
+
+        val (code, out, _) = runCapturingOutput(arrayOf(rootWithDeprecatedUsage().path))
+        assertEquals(EXIT_FINDINGS, code)
+        assertContains(out, "##teamcity[buildStatus text='1 usage(s) in 1 file(s): 1 ERROR match(es).']")
+        assertContains(
+            out,
+            "##teamcity[buildProblem description='KGP deprecation check FAILED: 1 usage(s) in 1 file(s): 1 ERROR match(es). Check artifact |'kgp-deprecations-report.txt|'.' identity='kgpDeprecations']",
+        )
+    }
+
+    @Test
+    fun teamcity_environment_emits_build_status_on_clean_run_without_build_problem() {
+        System.setProperty("kgp.pluginJars", jarWithDeprecation().absolutePath)
+        System.setProperty("teamcity.version", "2024.1")
+        val root = File(tmp, "clean").apply { mkdirs() }
+        File(root, "Nothing.kt").writeText("val greeting = \"hello\"\n")
+
+        val (code, out, _) = runCapturingOutput(arrayOf(root.path))
+        assertEquals(0, code)
+        assertContains(out, "##teamcity[buildStatus text='No deprecated API usages found in embedded scripts or reflective calls.']")
+        assertFalse(out.contains("##teamcity[buildProblem"), "Clean run must not emit buildProblem")
+    }
+
+    @Test
+    fun local_environment_does_not_emit_teamcity_messages() {
+        System.setProperty("kgp.pluginJars", jarWithDeprecation().absolutePath)
+        System.clearProperty("teamcity.version")
+
+        val (code, out, _) = runCapturingOutput(arrayOf(rootWithDeprecatedUsage().path))
+        assertEquals(EXIT_FINDINGS, code)
+        assertFalse(out.contains("##teamcity["), "Local run must not emit TeamCity service messages")
+    }
+
+    @Test
+    fun teamcity_escaping_handles_special_characters() {
+        val raw = "Test [with] 'quotes' and |pipes|\nnewline\rreturn"
+        val expected = "Test |[with|] |'quotes|' and ||pipes||\nnewline\rreturn"
+            .replace("\n", "|n")
+            .replace("\r", "|r")
+        assertEquals(expected, escapeTc(raw))
+    }
+
     // --- helpers ---
 
     /** Runs [run] and captures output for assertions. */
     private fun runSilently(args: Array<String>): Pair<Int, String> {
+        val (_, _, err) = runCapturingOutput(args)
+        return run(args) to err
+    }
+
+    private fun runCapturingOutput(args: Array<String>): Triple<Int, String, String> {
+        val out = ByteArrayOutputStream()
         val err = ByteArrayOutputStream()
         val originalOut = System.out
         val originalErr = System.err
-        System.setOut(PrintStream(ByteArrayOutputStream()))
+        System.setOut(PrintStream(out))
         System.setErr(PrintStream(err))
         try {
-            return run(args) to err.toString()
+            val code = run(args)
+            return Triple(code, out.toString(), err.toString())
         } finally {
             System.setOut(originalOut)
             System.setErr(originalErr)

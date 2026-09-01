@@ -146,7 +146,7 @@ For a one-off experiment, point `-Pallowlist` at a scratch file instead of editi
 - **`2`** - Setup failure: the check never ran (missing/blank scan root, scan root is not a directory, allowlist file not found, no KGP jars provided, or the jars yielded an empty index). Distinct from `1` so CI can tell a broken invocation from real violations.
 
 Gradle collapses any non-zero exit into its own generic failure, so `checkKgpDeprecations` inspects the code itself and fails with a distinguishable message:
-- `1` → `KGP deprecation check FAILED: deprecated API usages found.`
+- `1` → `KGP deprecation check FAILED: deprecated API usages found.` (When running in TeamCity, `Main` emits `##teamcity[buildStatus]` and `##teamcity[buildProblem]` instead of throwing a Gradle exception, failing the build cleanly without 100-line stack traces).
 - `2` → `KGP deprecation check DID NOT RUN (setup failure, exit 2).`
 
 ---
@@ -162,7 +162,7 @@ Nobody has to clone the IntelliJ monorepo to get a report: the scan runs as
 - **KGP version** - the `kgp.engine.version` build parameter (default `latest`, the last successful build of the source build); override it in the *Run…* dialog with a build number to index a specific KGP.
 - **Where KGP comes from** - the `kgp.build.type` build parameter (default `Kotlin_KotlinDev_Artifacts`); point it at a release branch's Artifacts build to index that branch instead of master.
 - **Where the result is** - the build log holds the banner and the summary line; the full per-finding report is the `kgp-deprecations-report.txt` artifact, published even when the build is red.
-- **Red build** - `ERROR`/`HIDDEN` findings exist (exit 1), i.e. the check did its job. A setup failure (exit 2) is reported with a different message.
+- **Red build** - `ERROR`/`HIDDEN` findings trigger a clean `##teamcity[buildProblem]` and set `##teamcity[buildStatus]` summary, failing the build without duplicate failures or Tooling API stack traces. A setup failure (exit 2) is reported with a different message.
 - **ripgrep** - a build step caches a pinned `rg` under `$HOME/.cache/kgp-detector/`, and the Gradle step passes it via `-PrgPath`; if the download fails, the scan still runs on the walk fallback.
 
 Detector code, allowlist and build configuration live in the same repository, so one merge request changes all three, and the run's VCS revision *is* the detector version.
