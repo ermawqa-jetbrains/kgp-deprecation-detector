@@ -198,6 +198,60 @@ class MainExitCodeTest {
         assertEquals(expected, escapeTc(raw))
     }
 
+    @Test
+    fun report_file_contains_executive_summary_and_quick_index_on_findings() {
+        System.setProperty("kgp.pluginJars", jarWithDeprecation().absolutePath)
+        val reportFile = File(tmp, "kgp-deprecations-report.txt")
+        System.setProperty("kgp.reportFile", reportFile.path)
+
+        val (code, _, _) = runCapturingOutput(arrayOf(rootWithDeprecatedUsage().path))
+        assertEquals(EXIT_FINDINGS, code)
+        val reportContent = reportFile.readText()
+        assertContains(reportContent, "EXECUTIVE SUMMARY")
+        assertContains(reportContent, "Total Usages: 1 across 1 file(s)")
+        assertContains(reportContent, "• ERROR  : 1 (fails build / action required)")
+        assertContains(reportContent, "QUICK INDEX")
+        assertContains(reportContent, "SEVERITY | API SYMBOL")
+        assertContains(reportContent, "ERROR    | getDefaultSourceSetName")
+        assertContains(reportContent, "DETAILS")
+        assertContains(reportContent, "[ERROR] getDefaultSourceSetName")
+    }
+
+    @Test
+    fun executive_summary_formats_all_severities() {
+        val findings = listOf(
+            Finding("fileA.kt", 1, 1, "use defaultSourceSet.name", DeprecationLevel.ERROR, "org.example.Foo", "fooMember"),
+            Finding("fileB.kt", 2, 1, "removed API", DeprecationLevel.HIDDEN, "org.example.Bar", "barMember"),
+            Finding("fileC.kt", 3, 1, "will be removed", DeprecationLevel.WARNING, "org.example.Baz", "bazMember"),
+        )
+        val summary = executiveSummary(findings)
+        assertContains(summary, "Total Usages: 3 across 3 file(s)")
+        assertContains(summary, "• ERROR  : 1 (fails build / action required)")
+        assertContains(summary, "• HIDDEN : 1 (removed API / action required)")
+        assertContains(summary, "• WARNING: 1 (advisory / future removal)")
+    }
+
+    @Test
+    fun quick_index_sorts_by_severity_and_usages() {
+        val findings = listOf(
+            Finding("fileA.kt", 1, 1, "warning message", DeprecationLevel.WARNING, "org.example.Warn", "warnApi"),
+            Finding("fileB.kt", 2, 1, "error message 1", DeprecationLevel.ERROR, "org.example.ErrLow", "errLow"),
+            Finding("fileC.kt", 3, 1, "error message 2", DeprecationLevel.ERROR, "org.example.ErrHigh", "errHigh"),
+            Finding("fileD.kt", 4, 1, "error message 2", DeprecationLevel.ERROR, "org.example.ErrHigh", "errHigh"),
+        )
+        val index = quickIndex(findings)
+        assertContains(index, "QUICK INDEX")
+        assertContains(index, "SEVERITY | API SYMBOL")
+        val lines = index.lines().filter { it.startsWith("ERROR") || it.startsWith("WARNING") }
+        assertEquals(3, lines.size)
+        // errHigh (2 usages) before errLow (1 usage)
+        assertContains(lines[0], "errHigh")
+        assertContains(lines[0], "2")
+        assertContains(lines[1], "errLow")
+        assertContains(lines[1], "1")
+        assertContains(lines[2], "warnApi")
+    }
+
     // --- helpers ---
 
     /** Runs [run] and captures output for assertions. */

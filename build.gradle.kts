@@ -127,9 +127,8 @@ val kgpRepoUrl = "$teamcityServer/guestAuth/app/rest/builds/" +
 
 repositories {
     mavenCentral()
-    // KGP comes from the TeamCity build that produced it, not from a published Maven repository:
-    // a deprecation phase is prepared against KGP built from Kotlin master, before it is deployed
-    // anywhere. 'exclusiveContent' keeps that version off mavenCentral (and everything else off
+    // KGP comes from the TeamCity build that produced it, not from a published Maven repository.
+    // 'exclusiveContent' keeps that version off mavenCentral (and everything else off
     // this repository, which only holds one version).
     exclusiveContent {
         forRepository {
@@ -225,12 +224,8 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
             0 -> Unit
             1 -> {
                 if (isTeamCity) {
-                    // On TeamCity, Main.kt already emitted ##teamcity[buildProblem ...] and
-                    // ##teamcity[buildStatus ...]. Throwing a GradleException here would cause
-                    // TeamCity's Gradle runner to fail with a 100-line Tooling API stack trace
-                    // and register a redundant second build problem ("Process exited with code 1").
-                    // By completing cleanly, TeamCity marks the build as failed solely due to the
-                    // buildProblem service message without any stack trace noise.
+                    // Main.kt already emitted ##teamcity[buildProblem]. Completing cleanly
+                    // marks the build failed without redundant errors or stack trace noise.
                 } else {
                     throw GradleException(
                         "KGP deprecation check FAILED: deprecated API usages found. See the report above."

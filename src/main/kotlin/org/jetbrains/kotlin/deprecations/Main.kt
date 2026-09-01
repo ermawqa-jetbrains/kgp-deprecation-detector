@@ -144,8 +144,15 @@ internal fun run(args: Array<String>): Int {
                 appendLine()
                 appendLine(scannedLine)
                 appendLine()
-                appendLine(summaryLine)
-                if (usages.isNotEmpty()) append(reportDetails(findings))
+                if (usages.isEmpty()) {
+                    appendLine(summaryLine)
+                } else {
+                    append(executiveSummary(usages))
+                    appendLine()
+                    append(quickIndex(findings))
+                    appendLine()
+                    append(reportDetails(findings))
+                }
             },
         )
         println(summaryLine)
@@ -153,8 +160,15 @@ internal fun run(args: Array<String>): Int {
     } else {
         println(scannedLine)
         println()
-        println(summaryLine)
-        if (usages.isNotEmpty()) print(reportDetails(findings))
+        if (usages.isEmpty()) {
+            println(summaryLine)
+        } else {
+            print(executiveSummary(usages))
+            println()
+            print(quickIndex(findings))
+            println()
+            print(reportDetails(findings))
+        }
     }
 
     val errors = usages.count { it.level == DeprecationLevel.ERROR }
@@ -225,13 +239,87 @@ private fun reportSummaryLine(findings: List<Finding>): String {
     return "${findings.size} usage(s) in $affected file(s): $breakdown match(es)."
 }
 
+internal fun executiveSummary(usages: List<Finding>): String = buildString {
+    appendLine("============================================================")
+    appendLine("EXECUTIVE SUMMARY")
+    appendLine("============================================================")
+    val affected = usages.map { it.file }.toSet().size
+    appendLine("Total Usages: ${usages.size} across $affected file(s)")
+    val errors = usages.count { it.level == DeprecationLevel.ERROR }
+    val hidden = usages.count { it.level == DeprecationLevel.HIDDEN }
+    val warnings = usages.count { it.level == DeprecationLevel.WARNING }
+    if (errors > 0) appendLine("  • ERROR  : $errors (fails build / action required)")
+    if (hidden > 0) appendLine("  • HIDDEN : $hidden (removed API / action required)")
+    if (warnings > 0) appendLine("  • WARNING: $warnings (advisory / future removal)")
+}
+
+internal data class QuickIndexEntry(
+    val level: DeprecationLevel,
+    val symbol: String,
+    val usages: Int,
+    val declaredIn: String,
+)
+
+internal fun quickIndex(findings: List<Finding>): String = buildString {
+    val entries = mutableListOf<QuickIndexEntry>()
+    for (level in listOf(DeprecationLevel.ERROR, DeprecationLevel.HIDDEN, DeprecationLevel.WARNING)) {
+        val bucket = findings.filter { it.level == level }
+        if (bucket.isEmpty()) continue
+        bucket.groupBy { it.deprecationId to it.message }
+            .map { (key, group) ->
+                val (deprecationId, _) = key
+                val classes = group.map { it.className }.distinct().sorted()
+                val hits = group.distinctBy { listOf(it.file, it.line, it.column) }.size
+                val declaredIn = classes.first() + if (classes.size > 1) " (+${classes.size - 1} more)" else ""
+                QuickIndexEntry(level, deprecationId, hits, declaredIn)
+            }
+            .sortedWith(compareByDescending<QuickIndexEntry> { it.usages }.thenBy { it.symbol })
+            .forEach { entries.add(it) }
+    }
+
+    if (entries.isEmpty()) return@buildString
+
+    val colSeverity = "SEVERITY"
+    val colSymbol = "API SYMBOL"
+    val colUsages = "USAGES"
+    val colDeclaredIn = "DECLARED IN"
+
+    val maxSeverityWidth = (entries.map { it.level.name } + colSeverity).maxOf { it.length }
+    val maxSymbolWidth = (entries.map { it.symbol } + colSymbol).maxOf { it.length }
+    val maxUsagesWidth = (entries.map { it.usages.toString() } + colUsages).maxOf { it.length }
+
+    appendLine("============================================================")
+    appendLine("QUICK INDEX")
+    appendLine("============================================================")
+    appendLine(
+        "${colSeverity.padEnd(maxSeverityWidth)} | ${colSymbol.padEnd(maxSymbolWidth)} | " +
+            "${colUsages.padEnd(maxUsagesWidth)} | $colDeclaredIn"
+    )
+    appendLine(
+        "${"-".repeat(maxSeverityWidth)}-+-" +
+            "${"-".repeat(maxSymbolWidth)}-+-" +
+            "${"-".repeat(maxUsagesWidth)}-+-" +
+            "-".repeat(30)
+    )
+    for (entry in entries) {
+        appendLine(
+            "${entry.level.name.padEnd(maxSeverityWidth)} | " +
+                "${entry.symbol.padEnd(maxSymbolWidth)} | " +
+                "${entry.usages.toString().padEnd(maxUsagesWidth)} | " +
+                entry.declaredIn
+        )
+    }
+}
+
 /**
  * One section per logical deprecation. Grouping by member and message instead of by declaring class
  * collapses the sub-interface hierarchy (`KotlinCompile`, `KotlinJvmCompile`, ...), which used to
  * repeat the very same call site 20+ times.
  */
-private fun reportDetails(findings: List<Finding>): String = buildString {
-    appendLine("------------------------------------------------------------")
+internal fun reportDetails(findings: List<Finding>): String = buildString {
+    appendLine("============================================================")
+    appendLine("DETAILS")
+    appendLine("============================================================")
     for (level in listOf(DeprecationLevel.ERROR, DeprecationLevel.HIDDEN, DeprecationLevel.WARNING)) {
         val bucket = findings.filter { it.level == level }
         if (bucket.isEmpty()) continue
