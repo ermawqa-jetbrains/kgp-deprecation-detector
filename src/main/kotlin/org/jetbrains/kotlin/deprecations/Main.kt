@@ -279,12 +279,12 @@ internal fun quickIndex(findings: List<Finding>): String = buildString {
 
     if (entries.isEmpty()) return@buildString
 
-    val colSeverity = "SEVERITY"
+    val deprecationLevel = "DEPRECATION LEVEL"
     val colSymbol = "API SYMBOL"
     val colUsages = "USAGES"
     val colDeclaredIn = "DECLARED IN"
 
-    val maxSeverityWidth = (entries.map { it.level.name } + colSeverity).maxOf { it.length }
+    val maxDeprecationLevelWidth = (entries.map { it.level.name } + deprecationLevel).maxOf { it.length }
     val maxSymbolWidth = (entries.map { it.symbol } + colSymbol).maxOf { it.length }
     val maxUsagesWidth = (entries.map { it.usages.toString() } + colUsages).maxOf { it.length }
 
@@ -292,18 +292,18 @@ internal fun quickIndex(findings: List<Finding>): String = buildString {
     appendLine("QUICK INDEX")
     appendLine("============================================================")
     appendLine(
-        "${colSeverity.padEnd(maxSeverityWidth)} | ${colSymbol.padEnd(maxSymbolWidth)} | " +
+        "${deprecationLevel.padEnd(maxDeprecationLevelWidth)} | ${colSymbol.padEnd(maxSymbolWidth)} | " +
             "${colUsages.padEnd(maxUsagesWidth)} | $colDeclaredIn"
     )
     appendLine(
-        "${"-".repeat(maxSeverityWidth)}-+-" +
+        "${"-".repeat(maxDeprecationLevelWidth)}-+-" +
             "${"-".repeat(maxSymbolWidth)}-+-" +
             "${"-".repeat(maxUsagesWidth)}-+-" +
             "-".repeat(30)
     )
     for (entry in entries) {
         appendLine(
-            "${entry.level.name.padEnd(maxSeverityWidth)} | " +
+            "${entry.level.name.padEnd(maxDeprecationLevelWidth)} | " +
                 "${entry.symbol.padEnd(maxSymbolWidth)} | " +
                 "${entry.usages.toString().padEnd(maxUsagesWidth)} | " +
                 entry.declaredIn
