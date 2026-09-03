@@ -148,10 +148,12 @@ before the usual findings and independent of whether there are any (unrelated) f
 for each requested name, `[FOUND] <requested> -> <memberName>` with its level, declaring class(es),
 reason, allowlist status, and real usage count, or `[NOT FOUND] <requested>` if no such member
 exists in the indexed jar(s). Matching mirrors the scanner: both the raw member name and its
-getter/setter-normalized form are tried, so a caller can say either `enabledLanguageFeatures` or
-`getEnabledLanguageFeatures` and match the same symbol. A caller (e.g. an automation) should treat
-`NOT FOUND` as inconclusive, never as a safe/ready result - it usually means the wrong KGP version
-was scanned, or the API is already fully removed from it.
+getter/setter-normalized form are tried (case-insensitively), so a caller can say either
+`enabledLanguageFeatures` or `getEnabledLanguageFeatures` and match the same symbol. Matching is
+otherwise exact - any further fuzziness (e.g. reconciling imprecise ticket wording) is the
+caller's job, not this tool's. A caller (e.g. an automation) should treat `NOT FOUND` as
+inconclusive, never as a safe/ready result - it usually means the wrong KGP version was scanned,
+or the API is already fully removed from it.
 
 ### Exit Codes
 - **`0`** - Clean or `WARNING`-only matches (warnings reported but do not fail the build).

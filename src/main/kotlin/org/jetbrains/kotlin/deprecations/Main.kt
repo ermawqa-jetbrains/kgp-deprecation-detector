@@ -365,7 +365,7 @@ internal fun reportDetails(findings: List<Finding>): String = buildString {
  * API), independent of whether they have usages. Without this, '0 usages' is ambiguous between
  * 'indexed, genuinely unused' and 'not in this jar at all' (wrong version, typo, already removed).
  * Matching mirrors the scanner: both the raw member name and its getter/setter-normalized
- * [DeprecatedSymbol.searchName] are tried, so a ticket can say either 'enabledLanguageFeatures' or
+ * [DeprecatedSymbol.searchName] are tried, so a caller can say either 'enabledLanguageFeatures' or
  * 'getEnabledLanguageFeatures' and match the same indexed symbol.
  *
  * Takes [allFindings] (before allowlist filtering) plus [allowlistedGroups] rather than the final

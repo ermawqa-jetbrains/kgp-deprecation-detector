@@ -292,11 +292,15 @@ Pass 2 (reflective calls):
   'genuinely unused' apart from 'wrong KGP version / typo / already fully removed' from the normal
   findings alone, since those only list symbols that *have* usages. `targetSymbolCheck` in
   `Main.kt` searches the full index (not just findings) for each requested name — matching both the
-  raw `memberName` and the getter/setter-normalized `DeprecatedSymbol.searchName`, the same two
-  forms the scanners themselves search for — and prints an explicit `[FOUND]`/`[NOT FOUND]` per
-  name, with level, declaring classes, allowlist status and real usage count. It is fed
+  raw `memberName` and the getter/setter-normalized `DeprecatedSymbol.searchName` case-insensitively,
+  the same two forms the scanners themselves search for — and prints an explicit `[FOUND]`/`[NOT
+  FOUND]` per name, with level, declaring classes, allowlist status and real usage count. It is fed
   `allFindings` (pre-allowlist) plus the `allowlistedGroups` set, not the final post-allowlist
   `findings`, specifically so 'allowlisted' and 'truly zero' don't collapse into the same '0'.
+  Matching here is deliberately exact, not fuzzy: reconciling imprecise/singular-plural ticket
+  wording (e.g. `enabledLanguageFeature` vs `getEnabledLanguageFeatures`) is done by the caller
+  (the Air automation scripts), not this detector — this tool's job is indexing bytecode and
+  scanning source, not interpreting natural-language ticket text.
 - **A TeamCity `RelativeId` resolves against the versioned-settings root project, not each nested
   `Project()`.** `KgpDeprecationDetectorScan`'s id is `RelativeId("KgpDeprecationDetectorScan")`,
   but on a live playground server the real build-type id was confirmed to be
