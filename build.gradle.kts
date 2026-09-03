@@ -97,47 +97,48 @@ val buildTypeUrl = "$teamcityServer/buildConfiguration/$kgpBuildType"
 // so any pinned default would rot.
 val requestedVersion = (findProperty("kgpEngineVersion") as String?)?.takeIf { it.isNotBlank() } ?: "latest"
 val isLatest = requestedVersion.equals("latest", ignoreCase = true)
-val resolvedVersion = if (isLatest) {
+val tcBuildNumber = if (isLatest) {
     teamcityBuildNumber("buildType:(id:$kgpBuildType),status:SUCCESS,branch:default:any")
 } else {
-    // A version is a build number of that configuration, so an unknown one is worth reporting
-    // instead of as a bare "Could not find org.jetbrains.kotlin:kotlin-gradle-plugin:<version>".
-    requestedVersion.takeIf {
-        teamcityBuildNumber("buildType:(id:$kgpBuildType),number:$requestedVersion,branch:default:any") != null
-    }
+    teamcityBuildNumber("buildType:(id:$kgpBuildType),number:$requestedVersion,branch:default:any")
 }
+
+val isTeamCityBuild = tcBuildNumber != null
+val engineVersion = tcBuildNumber ?: requestedVersion
+val engineSource = if (isTeamCityBuild) "TeamCity $kgpBuildType" else "Maven (Central / kt-dev)"
 
 // Reported by the check task, not thrown here: only that task needs the jars, so 'build' (unit
 // tests, pure offline ASM) must keep working without TeamCity.
 val versionProblem = when {
-    resolvedVersion != null -> null
-    isLatest -> "Cannot ask TeamCity for the latest build of '$kgpBuildType' ($buildTypeUrl).\n" +
-        "Connect to the JetBrains network, or pin a version with -PkgpEngineVersion=<build number>."
-    else -> "'$kgpBuildType' has no build numbered '$requestedVersion' (or TeamCity is unreachable).\n" +
-        "KGP jars are taken from that configuration, so a version is one of its build numbers " +
-        "(e.g. 2.5.0-dev-6260), not a published release. Pick one at $buildTypeUrl, " +
-        "or use -PkgpEngineVersion=latest."
+    isLatest && !isTeamCityBuild -> "Cannot ask TeamCity for the latest build of '$kgpBuildType' ($buildTypeUrl).\n" +
+        "Connect to the JetBrains network, or pin a version with -PkgpEngineVersion=<version>."
+    else -> null
 }
-val engineVersion = resolvedVersion ?: requestedVersion
 
 // The build publishes its whole Maven repository as a single 'maven.zip' artifact; TeamCity serves
 // files from inside an archive, so the artifact is usable as a Maven repository as is.
-val kgpRepoUrl = "$teamcityServer/guestAuth/app/rest/builds/" +
-    "buildType:(id:$kgpBuildType),number:$engineVersion,branch:default:any/artifacts/content/maven.zip!/"
+val kgpRepoUrl = if (isTeamCityBuild) {
+    "$teamcityServer/guestAuth/app/rest/builds/" +
+        "buildType:(id:$kgpBuildType),number:$engineVersion,branch:default:any/artifacts/content/maven.zip!/"
+} else null
 
 repositories {
     mavenCentral()
-    // KGP comes from the TeamCity build that produced it, not from a published Maven repository.
-    // 'exclusiveContent' keeps that version off mavenCentral (and everything else off
-    // this repository, which only holds one version).
-    exclusiveContent {
-        forRepository {
-            maven {
-                name = "kotlinTeamCityBuild"
-                setUrl(kgpRepoUrl)
+    maven {
+        name = "kotlinDevRepo"
+        setUrl("https://packages.jetbrains.team/maven/p/kt/dev")
+    }
+    // If resolved from a TeamCity build, 'exclusiveContent' routes that specific version to TeamCity maven.zip
+    if (kgpRepoUrl != null) {
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = "kotlinTeamCityBuild"
+                    setUrl(kgpRepoUrl)
+                }
             }
+            filter { includeVersionByRegex("org\\.jetbrains\\.kotlin(\\..+)?", ".+", Regex.escape(engineVersion)) }
         }
-        filter { includeVersionByRegex("org\\.jetbrains\\.kotlin(\\..+)?", ".+", Regex.escape(engineVersion)) }
     }
 }
 
@@ -180,7 +181,7 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     versionProblem?.let { throw GradleException(it) }
     // Surface indexed KGP version and where its jars came from in the banner
     systemProperty("kgp.engineVersion", engineVersion)
-    systemProperty("kgp.engineSource", "TeamCity $kgpBuildType")
+    systemProperty("kgp.engineSource", engineSource)
     // Lazy resolution of KGP jars. Must not be a Provider for systemProperty compatibility.
     systemProperty("kgp.pluginJars", kgpJars.asPath)
     // Verification must always run
