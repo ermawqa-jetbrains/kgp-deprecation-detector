@@ -57,6 +57,10 @@ internal fun run(args: Array<String>): Int {
 
     val engineVersion = System.getProperty("kgp.engineVersion")?.takeIf { it.isNotBlank() }
     val engineSource = System.getProperty("kgp.engineSource")?.takeIf { it.isNotBlank() }
+    // Symbols the caller (e.g. the Air automation) wants an explicit found/not-found verdict for,
+    // regardless of whether they have any usages - see 'targetSymbolCheck' below.
+    val targetSymbols = System.getProperty("kgp.targetSymbols").orEmpty()
+        .split(',').map { it.trim() }.filter { it.isNotBlank() }.distinct()
     val jars = System.getProperty("kgp.pluginJars").orEmpty()
         .split(File.pathSeparator).filter { it.isNotBlank() }
     if (jars.isEmpty()) {
@@ -132,6 +136,10 @@ internal fun run(args: Array<String>): Int {
 
     val scannedLine = "Scanned ${candidates.size} embedded-script candidate file(s), ${reflectiveCandidates.size} reflective-call candidate file(s)."
     val summaryLine = reportSummaryLine(usages)
+    // Printed whenever target symbols were requested, independently of whether there are any
+    // (unrelated) findings elsewhere - this is what makes a 'READY, 0 usages' verdict trustworthy
+    // instead of ambiguous with 'the symbol was never indexed at all'.
+    val targetCheck = targetSymbolCheck(targetSymbols, index, allFindings, allowlistedGroups)
 
     if (reportFilePath != null) {
         println(scannedLine)
@@ -144,6 +152,10 @@ internal fun run(args: Array<String>): Int {
                 appendLine()
                 appendLine(scannedLine)
                 appendLine()
+                if (targetCheck.isNotEmpty()) {
+                    append(targetCheck)
+                    appendLine()
+                }
                 if (usages.isEmpty()) {
                     appendLine(summaryLine)
                 } else {
@@ -160,6 +172,10 @@ internal fun run(args: Array<String>): Int {
     } else {
         println(scannedLine)
         println()
+        if (targetCheck.isNotEmpty()) {
+            print(targetCheck)
+            println()
+        }
         if (usages.isEmpty()) {
             println(summaryLine)
         } else {
@@ -344,8 +360,72 @@ internal fun reportDetails(findings: List<Finding>): String = buildString {
     appendLine("------------------------------------------------------------")
 }
 
+/**
+ * Explicit found/not-found verdict for symbols the caller cares about (e.g. the ticket's target
+ * API), independent of whether they have usages. Without this, '0 usages' is ambiguous between
+ * 'indexed, genuinely unused' and 'not in this jar at all' (wrong version, typo, already removed).
+ * Matching mirrors the scanner: both the raw member name and its getter/setter-normalized
+ * [DeprecatedSymbol.searchName] are tried, so a ticket can say either 'enabledLanguageFeatures' or
+ * 'getEnabledLanguageFeatures' and match the same indexed symbol.
+ *
+ * Takes [allFindings] (before allowlist filtering) plus [allowlistedGroups] rather than the final
+ * (post-allowlist) findings, so a caller can tell 'genuinely 0 usages' apart from 'usages exist but
+ * are all suppressed by the allowlist' - both would otherwise collapse to the same '0'.
+ */
+internal fun targetSymbolCheck(
+    requestedSymbols: List<String>,
+    index: List<DeprecatedSymbol>,
+    allFindings: List<Finding>,
+    allowlistedGroups: Set<Pair<String, String>>,
+): String {
+    if (requestedSymbols.isEmpty()) return ""
+    return buildString {
+        appendLine("============================================================")
+        appendLine("TARGET SYMBOL CHECK")
+        appendLine("============================================================")
+        appendLine("Requested (from ticket): ${requestedSymbols.joinToString(", ")}")
+        for (requested in requestedSymbols) {
+            appendLine()
+            val simple = requested.substringAfterLast('.').lowercase()
+            val matches = index.filter { s ->
+                simple == s.searchName.lowercase() || simple == (s.memberName ?: s.className.substringAfterLast('.')).lowercase()
+            }
+            if (matches.isEmpty()) {
+                appendLine("[NOT FOUND] $requested")
+                appendLine("  No symbol with this name exists in the indexed KGP jar(s).")
+                appendLine("  Check spelling/qualification, or it may already be fully removed - use an earlier baseline KGP version.")
+                continue
+            }
+            val groups = matches.groupBy { (it.memberName ?: it.className.substringAfterLast('.')) to it.message }
+            groups.entries.forEachIndexed { i, (key, group) ->
+                val (memberKey, message) = key
+                val classes = group.map { it.className }.distinct().sorted()
+                val usageCount = allFindings
+                    .filter { it.deprecationId == memberKey && it.message == message }
+                    .distinctBy { listOf(it.file, it.line, it.column) }
+                    .size
+                val isAllowlisted = key in allowlistedGroups
+                if (i > 0) appendLine()
+                appendLine("[FOUND] $requested -> $memberKey")
+                appendLine("  Level      : ${group.first().level}")
+                appendLine("  Declared in: ${describeClasses(classes)}")
+                appendLine("  Reason     : $message")
+                appendLine("  Allowlisted: ${if (isAllowlisted) "yes (config/allowlist-intellij.txt)" else "no"}")
+                appendLine(
+                    "  Usages     : $usageCount" + when {
+                        usageCount == 0 -> " (indexed, no call sites found in monorepo)"
+                        isAllowlisted -> " (all suppressed by the allowlist, not an active breakage)"
+                        else -> " (active call site(s) in monorepo, not allowlisted)"
+                    }
+                )
+            }
+        }
+        appendLine("------------------------------------------------------------")
+    }
+}
+
 /** Lists declaring classes, truncated so a 20-interface hierarchy stays readable. */
-private fun describeClasses(classes: List<String>): String {
+internal fun describeClasses(classes: List<String>): String {
     val shown = classes.take(3)
     val rest = classes.size - shown.size
     return shown.joinToString(", ") + if (rest > 0) ", +$rest more" else ""
@@ -364,5 +444,5 @@ private fun printHelpUsage() {
     System.err.println()
     System.err.println("As a Gradle task:")
     System.err.println("  ./gradlew checkKgpDeprecations [-PmonorepoDir=<path>] [-Pallowlist=<path>] [-PkgpEngineVersion=<ver>]")
-    System.err.println("    [-PexcludePatterns=/foo/,/bar/] [-PreportFile=<path>] [-PfullIndex]")
+    System.err.println("    [-PexcludePatterns=/foo/,/bar/] [-PreportFile=<path>] [-PfullIndex] [-PtargetSymbols=name1,name2]")
 }

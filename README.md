@@ -73,6 +73,7 @@ The detector operates in two independent passes combined with an index and a fin
     [-PreportFile=/path/to/report.txt] \
     [-PfullIndex] \
     [-PrgPath=/path/to/rg] \
+    [-PtargetSymbols=name1,name2] \
     [-PbuildScan]
 ```
 
@@ -88,6 +89,7 @@ The detector operates in two independent passes combined with an index and a fin
 | `reportFile` | Path to write the full report to. When set, stdout only prints the banner, the scan/summary counts, and a "Report is ready" pointer - the full per-finding dump goes to this file only | `build/reports/kgp-deprecations.txt` |
 | `fullIndex` | Keep `internal`/`utils`/`impl` packages and `Android*` classes in the deprecation index (more coverage, more noise) | Filtered out |
 | `rgPath` | Explicit path to the `rg` executable, bypassing `PATH`. Needed on CI runners that recompute `PATH` (TeamCity's Gradle step with `jdkHome` set silently drops `PATH` prepends) | `rg` from `PATH` |
+| `targetSymbols` | Comma-separated symbol names to check explicitly: for each, the report states whether it was found in the indexed KGP jar, its real usage count, and whether those usages are already allowlisted - so '0 usages' never has to be read as ambiguous between 'genuinely unused' and 'not indexed at all' | `(none)` |
 | `buildScan` | Publish a Develocity build scan to `ge.labs.jb.gg`. Opt-in so an offline or network-restricted CI agent does not depend on reaching it | Not published |
 
 ### Where The KGP Jars Come From
@@ -139,6 +141,17 @@ An allowlist entry suppresses a finding permanently, so it must stay auditable:
 - **Never list `$DefaultImpls` classes or non-KGP packages.** Neither is indexed, so such an entry can never match anything.
 
 For a one-off experiment, point `-Pallowlist` at a scratch file instead of editing the shared one.
+
+### Target Symbol Check
+When `-PtargetSymbols` is set, the report always includes a `TARGET SYMBOL CHECK` section, printed
+before the usual findings and independent of whether there are any (unrelated) findings elsewhere:
+for each requested name, `[FOUND] <requested> -> <memberName>` with its level, declaring class(es),
+reason, allowlist status, and real usage count, or `[NOT FOUND] <requested>` if no such member
+exists in the indexed jar(s). Matching mirrors the scanner: both the raw member name and its
+getter/setter-normalized form are tried, so a caller can say either `enabledLanguageFeatures` or
+`getEnabledLanguageFeatures` and match the same symbol. A caller (e.g. an automation) should treat
+`NOT FOUND` as inconclusive, never as a safe/ready result - it usually means the wrong KGP version
+was scanned, or the API is already fully removed from it.
 
 ### Exit Codes
 - **`0`** - Clean or `WARNING`-only matches (warnings reported but do not fail the build).

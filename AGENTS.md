@@ -287,6 +287,23 @@ Pass 2 (reflective calls):
   `excludePatterns` list, passed to both `EmbeddedScriptFinder.candidates` and
   `ReflectiveCallFinder.candidates`) — an excluded test-fixture path is excluded from both scans,
   not just the embedded-script one.
+- **`-PtargetSymbols` exists because '0 usages' is ambiguous without it.** A caller asking about a
+  specific API (e.g. an automation checking a YouTrack ticket's target symbol) cannot tell
+  'genuinely unused' apart from 'wrong KGP version / typo / already fully removed' from the normal
+  findings alone, since those only list symbols that *have* usages. `targetSymbolCheck` in
+  `Main.kt` searches the full index (not just findings) for each requested name — matching both the
+  raw `memberName` and the getter/setter-normalized `DeprecatedSymbol.searchName`, the same two
+  forms the scanners themselves search for — and prints an explicit `[FOUND]`/`[NOT FOUND]` per
+  name, with level, declaring classes, allowlist status and real usage count. It is fed
+  `allFindings` (pre-allowlist) plus the `allowlistedGroups` set, not the final post-allowlist
+  `findings`, specifically so 'allowlisted' and 'truly zero' don't collapse into the same '0'.
+- **A TeamCity `RelativeId` resolves against the versioned-settings root project, not each nested
+  `Project()`.** `KgpDeprecationDetectorScan`'s id is `RelativeId("KgpDeprecationDetectorScan")`,
+  but on a live playground server the real build-type id was confirmed to be
+  `Kotlin_BuildPlayground_Laniakea_KgpDeprecationDetectorScan` — no `ServiceTasks` or
+  `KgpDeprecationDetector` segment, even though those are real project names in the UI tree.
+  Anything hardcoding the build-type id (Air automation scripts, docs) must follow this rule, not
+  the naive "concatenate every ancestor project id" assumption.
 
 ## Build / test / run
 
@@ -297,7 +314,7 @@ Pass 2 (reflective calls):
 ```
 
 Flags: `-Pallowlist` `-PkgpEngineVersion` `-PkgpBuildType` `-PexcludePatterns` `-PreportFile`
-`-PfullIndex` `-PrgPath` `-PbuildScan`. See README.
+`-PfullIndex` `-PrgPath` `-PtargetSymbols` `-PbuildScan`. See README.
 
 ## Repo
 

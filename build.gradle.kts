@@ -24,6 +24,7 @@ val knownProjectProperties = setOf(
     "reportFile",
     "fullIndex",
     "rgPath",
+    "targetSymbols",
 )
 
 run {
@@ -196,6 +197,10 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     // internally, e.g. TeamCity's Gradle step with jdkHome set, silently dropping PATH prepends).
     findProperty("rgPath")?.toString()?.takeIf { it.isNotBlank() }
         ?.let { systemProperty("kgp.rgPath", it) }
+    // -PtargetSymbols asks for an explicit found/not-found verdict (with real usage count) for
+    // specific symbols, so a caller never has to infer "0 usages" vs "not indexed at all".
+    findProperty("targetSymbols")?.toString()?.takeIf { it.isNotBlank() }
+        ?.let { systemProperty("kgp.targetSymbols", it) }
 
     // Forward TeamCity detection if present
     findProperty("teamcity.version")?.toString()?.takeIf { it.isNotBlank() }

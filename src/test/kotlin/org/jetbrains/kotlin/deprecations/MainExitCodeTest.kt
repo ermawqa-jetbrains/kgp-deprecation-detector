@@ -21,7 +21,10 @@ class MainExitCodeTest {
 
     private val tmp: File = createTempDirectory("kgp-exit-code").toFile()
     private val properties =
-        listOf("kgp.pluginJars", "kgp.engineVersion", "kgp.excludePatterns", "kgp.fullIndex", "kgp.reportFile", "teamcity.version")
+        listOf(
+            "kgp.pluginJars", "kgp.engineVersion", "kgp.excludePatterns", "kgp.fullIndex", "kgp.reportFile",
+            "kgp.targetSymbols", "teamcity.version",
+        )
     private val savedProperties = properties.associateWith { System.getProperty(it) }
 
     @AfterTest
@@ -250,6 +253,76 @@ class MainExitCodeTest {
         assertContains(lines[1], "errLow")
         assertContains(lines[1], "1")
         assertContains(lines[2], "warnApi")
+    }
+
+    @Test
+    fun target_symbol_check_reports_not_found_when_no_symbol_matches() {
+        val report = targetSymbolCheck(listOf("doesNotExistAnywhere"), emptyList(), emptyList(), emptySet())
+        assertContains(report, "TARGET SYMBOL CHECK")
+        assertContains(report, "[NOT FOUND] doesNotExistAnywhere")
+    }
+
+    @Test
+    fun target_symbol_check_matches_getter_normalized_name_with_zero_usages() {
+        // Ticket says the property name ('enabledLanguageFeatures'); the indexed bytecode member
+        // is the JVM getter ('getEnabledLanguageFeatures') - DeprecatedSymbol.searchName bridges them.
+        val symbol = DeprecatedSymbol(
+            className = "org.jetbrains.kotlin.gradle.plugin.LanguageSettings",
+            memberName = "getEnabledLanguageFeatures",
+            memberDescriptor = null,
+            level = DeprecationLevel.ERROR,
+            message = "Use the compiler options DSL instead",
+            replaceWith = null,
+        )
+        val report = targetSymbolCheck(listOf("enabledLanguageFeatures"), listOf(symbol), emptyList(), emptySet())
+        assertContains(report, "[FOUND] enabledLanguageFeatures -> getEnabledLanguageFeatures")
+        assertContains(report, "Level      : ERROR")
+        assertContains(report, "Allowlisted: no")
+        assertContains(report, "Usages     : 0 (indexed, no call sites found in monorepo)")
+    }
+
+    @Test
+    fun target_symbol_check_counts_real_usages_when_present() {
+        val symbol = DeprecatedSymbol(
+            className = "org.jetbrains.kotlin.gradle.plugin.LanguageSettings",
+            memberName = "enableLanguageFeature",
+            memberDescriptor = null,
+            level = DeprecationLevel.ERROR,
+            message = "Removed in 2.5",
+            replaceWith = null,
+        )
+        val finding = Finding(
+            file = "Foo.kt", line = 1, column = 1,
+            symbol = "org.jetbrains.kotlin.gradle.plugin.LanguageSettings.enableLanguageFeature",
+            level = DeprecationLevel.ERROR, message = "Removed in 2.5",
+            className = "org.jetbrains.kotlin.gradle.plugin.LanguageSettings", memberName = "enableLanguageFeature",
+        )
+        val report = targetSymbolCheck(listOf("enableLanguageFeature"), listOf(symbol), listOf(finding), emptySet())
+        assertContains(report, "[FOUND] enableLanguageFeature -> enableLanguageFeature")
+        assertContains(report, "Allowlisted: no")
+        assertContains(report, "Usages     : 1 (active call site(s) in monorepo, not allowlisted)")
+    }
+
+    @Test
+    fun target_symbol_check_marks_allowlisted_usages_distinctly_from_zero_usages() {
+        val symbol = DeprecatedSymbol(
+            className = "org.jetbrains.kotlin.gradle.plugin.LanguageSettings",
+            memberName = "enableLanguageFeature",
+            memberDescriptor = null,
+            level = DeprecationLevel.ERROR,
+            message = "Removed in 2.5",
+            replaceWith = null,
+        )
+        val finding = Finding(
+            file = "Foo.kt", line = 1, column = 1,
+            symbol = "org.jetbrains.kotlin.gradle.plugin.LanguageSettings.enableLanguageFeature",
+            level = DeprecationLevel.ERROR, message = "Removed in 2.5",
+            className = "org.jetbrains.kotlin.gradle.plugin.LanguageSettings", memberName = "enableLanguageFeature",
+        )
+        val allowlistedGroups = setOf("enableLanguageFeature" to "Removed in 2.5")
+        val report = targetSymbolCheck(listOf("enableLanguageFeature"), listOf(symbol), listOf(finding), allowlistedGroups)
+        assertContains(report, "Allowlisted: yes (config/allowlist-intellij.txt)")
+        assertContains(report, "Usages     : 1 (all suppressed by the allowlist, not an active breakage)")
     }
 
     // --- helpers ---
