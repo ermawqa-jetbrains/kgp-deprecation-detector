@@ -209,7 +209,7 @@ class MainExitCodeTest {
         val reportContent = reportFile.readText()
         assertContains(reportContent, "EXECUTIVE SUMMARY")
         assertContains(reportContent, "Total Usages: 1 across 1 file(s)")
-        assertContains(reportContent, "• ERROR  : 1 (fails build / action required)")
+        assertContains(reportContent, "- ERROR  : 1 (fails build / action required)")
         assertContains(reportContent, "QUICK INDEX")
         assertContains(reportContent, "SEVERITY | API SYMBOL")
         assertContains(reportContent, "ERROR    | getDefaultSourceSetName")
@@ -226,9 +226,9 @@ class MainExitCodeTest {
         )
         val summary = executiveSummary(findings)
         assertContains(summary, "Total Usages: 3 across 3 file(s)")
-        assertContains(summary, "• ERROR  : 1 (fails build / action required)")
-        assertContains(summary, "• HIDDEN : 1 (removed API / action required)")
-        assertContains(summary, "• WARNING: 1 (advisory / future removal)")
+        assertContains(summary, "- ERROR  : 1 (fails build / action required)")
+        assertContains(summary, "- HIDDEN : 1 (removed API / action required)")
+        assertContains(summary, "- WARNING: 1 (advisory / future removal)")
     }
 
     @Test
