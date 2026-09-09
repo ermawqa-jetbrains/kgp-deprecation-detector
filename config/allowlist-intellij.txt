@@ -41,3 +41,9 @@ org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig$DevServer.get
 
 # "getTargets" on KotlinJsProjectExtension is marked HIDDEN by KGP specifically for IDE MPP import
 org.jetbrains.kotlin.gradle.dsl.KotlinJsProjectExtension.getTargets
+
+# "contains" collides with plain Groovy/Java Collection.contains(...) (e.g. TaskContainer.names.contains(...))
+org.jetbrains.kotlin.buildtools.api.arguments.CommonCompilerArguments.contains
+
+# "findAll" collides with plain Groovy List.findAll { ... }
+org.jetbrains.kotlin.gradle.dsl.DefaultTargetsFromPresetExtension.findAll

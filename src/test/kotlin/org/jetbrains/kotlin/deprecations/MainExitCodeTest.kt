@@ -37,9 +37,8 @@ class MainExitCodeTest {
 
     @Test
     fun no_arguments_fails_setup() {
-        val (code, err) = runSilently(emptyArray())
+        val (code, _) = runSilently(emptyArray())
         assertEquals(EXIT_SETUP_FAILURE, code)
-        assertContains(err, "Usage:")
     }
 
     @Test

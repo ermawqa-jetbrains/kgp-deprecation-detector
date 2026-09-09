@@ -23,55 +23,21 @@ internal const val EXIT_FINDINGS = 1
 internal const val EXIT_SETUP_FAILURE = 2
 
 internal fun run(args: Array<String>): Int {
-    val reportFilePath = System.getProperty("kgp.reportFile")?.takeIf { it.isNotBlank() }
+    val config = DetectorConfig.parse(args) ?: return EXIT_SETUP_FAILURE
+    val indexData = buildIndex(config) ?: return EXIT_SETUP_FAILURE
+    val scanResult = executeScan(config, indexData)
+    publishReport(config, scanResult)
+    return scanResult.exitCode
+}
 
-    if (args.isEmpty() || args[0].isBlank()) {
-        printHelpUsage()
-        return EXIT_SETUP_FAILURE
-    }
-
-    val scanRoot = File(args[0]).canonicalFile
-    if (!scanRoot.isDirectory) {
-        System.err.println("Not a directory: ${scanRoot.path}")
-        return EXIT_SETUP_FAILURE
-    }
-
-    val allowlistPath = args.getOrNull(1)?.takeIf { it.isNotBlank() }
-    val allowlistFile = allowlistPath?.let(::File)
-    val allowlist = if (allowlistFile == null) emptySet() else {
-        loadAllowlist(allowlistFile) ?: return EXIT_SETUP_FAILURE
-    }
-
-    // Default excludes + user patterns
-    val defaultExcludes = listOf(
-        "/testData/", "/testdata/", "/testResources/", "/testSources/", "/testSrc/",
-        "/test/", "/tests/", "/integration-tests/", "/agpIntegrationTestSrc/", "/resources/",
-        // Notebook prompt (not a script)
-        "/privacy/KotlinNotebookSystemPromptPrivacySafeWrapper.kt",
-        // Documentation snippet (not a script)
-        "/fleet/buildtool/bundles/helpers.kt",
-    )
-    val userExcludes = System.getProperty("kgp.excludePatterns").orEmpty()
-        .split(',').map { it.trim() }.filter { it.isNotBlank() }
-    val excludePatterns = (defaultExcludes + userExcludes).distinct()
-
-    val engineVersion = System.getProperty("kgp.engineVersion")?.takeIf { it.isNotBlank() }
-    val engineSource = System.getProperty("kgp.engineSource")?.takeIf { it.isNotBlank() }
-    // Symbols the caller (e.g. the Air automation) wants an explicit found/not-found verdict for,
-    // regardless of whether they have any usages - see 'targetSymbolCheck' below.
-    val targetSymbols = System.getProperty("kgp.targetSymbols").orEmpty()
-        .split(',').map { it.trim() }.filter { it.isNotBlank() }.distinct()
-    val jars = System.getProperty("kgp.pluginJars").orEmpty()
-        .split(File.pathSeparator).filter { it.isNotBlank() }
-    if (jars.isEmpty()) {
-        System.err.println("No KGP jars provided (kgp.pluginJars) - nothing to match against.")
-        return EXIT_SETUP_FAILURE
-    }
-    // -PfullIndex includes internal/Android packages
-    val fullIndex = System.getProperty("kgp.fullIndex").toBoolean()
+/**
+ * Extracts deprecated symbols from the provided KGP jars using ASM bytecode inspection.
+ * Returns null if jar extraction fails or if no symbols are found.
+ */
+internal fun buildIndex(config: DetectorConfig): IndexData? {
     // Build index. Errors are reported to avoid silent partial runs.
-    val jarIndexes = jars.map { jar ->
-        runCatching { KgpDeprecationExtractor.extractIndex(jar, fullIndex) }
+    val jarIndexes = config.pluginJars.map { jar ->
+        runCatching { KgpDeprecationExtractor.extractIndex(jar, config.fullIndex) }
             .onFailure { System.err.println("Failed to read KGP jar '$jar': $it") }
             .getOrDefault(KgpDeprecationExtractor.JarIndex(emptyList(), 0))
     }
@@ -81,33 +47,26 @@ internal fun run(args: Array<String>): Int {
     val syntheticClasses = jarIndexes.sumOf { it.syntheticClasses }
     if (index.isEmpty()) {
         System.err.println("No @Deprecated symbols found in the KGP jars.")
-        return EXIT_SETUP_FAILURE
+        return null
     }
+    return IndexData(
+        symbols = index,
+        skippedClasses = skippedClasses,
+        outOfScopeClasses = outOfScopeClasses,
+        syntheticClasses = syntheticClasses,
+    )
+}
 
-    val banner = buildString {
-        appendLine("KGP DEPRECATION CHECK")
-        appendLine("NOTE: MIGHT INCLUDE FALSE POSITIVES!")
-        appendLine("  Scanning : ${scanRoot.path}")
-        appendLine("  KGP      : ${engineVersion ?: "(version unknown)"} (${index.size} deprecated symbol(s) indexed)")
-        if (engineSource != null) appendLine("  Jars from: $engineSource")
-        if (skippedClasses > 0) {
-            appendLine("  Index    : $skippedClasses class(es) skipped (internal/utils/impl/Android) - pass -PfullIndex to include them")
-        }
-        appendLine("  Scope    : ${KgpDeprecationExtractor.PACKAGE_SCOPE}.*" +
-            if (outOfScopeClasses > 0) " ($outOfScopeClasses non-KGP class(es) ignored)" else "")
-        if (syntheticClasses > 0) {
-            appendLine("  Synthetic: $syntheticClasses \$DefaultImpls class(es) ignored (copies of their interface)")
-        }
-        appendLine("  Allowlist: ${if (allowlist.isEmpty()) "(none)" else "${allowlist.size} entries"}")
-        if (excludePatterns.isNotEmpty()) appendLine("  Excluded : ${excludePatterns.joinToString(", ")}")
-        if (reportFilePath != null) appendLine("  Report   : $reportFilePath")
-    }
-    print(banner)
-    println()
+/**
+ * Executes parallel scanning of embedded scripts and reflective calls, resolves allowlist suppressions,
+ * and performs target symbol checks.
+ */
+internal fun executeScan(config: DetectorConfig, indexData: IndexData): ScanResult {
+    val banner = indexData.buildBanner(config)
 
     /** SCAN 1: Embedded scripts */
-    val scanner = EmbeddedScriptScanner(index)
-    val candidates = EmbeddedScriptFinder.candidates(scanRoot, excludePatterns).toList()
+    val scanner = EmbeddedScriptScanner(indexData.symbols)
+    val candidates = EmbeddedScriptFinder.candidates(config.scanRoot, config.excludePatterns).toList()
     val embeddedFindings = candidates.parallelStream().map { file ->
         EmbeddedScriptExtractor.extract(file).flatMap { s ->
             scanner.scanText(s.text, file.path, s.startLine, s.startColumn)
@@ -115,102 +74,89 @@ internal fun run(args: Array<String>): Int {
     }.toList().flatten()
 
     /** SCAN 2: Reflective calls */
-    val reflectiveScanner = ReflectiveCallArgScanner(index)
-    val reflectiveCandidates = ReflectiveCallFinder.candidates(scanRoot, excludePatterns).toList()
+    val reflectiveScanner = ReflectiveCallArgScanner(indexData.symbols)
+    val reflectiveCandidates = ReflectiveCallFinder.candidates(config.scanRoot, config.excludePatterns).toList()
     val reflectiveFindings = reflectiveCandidates.parallelStream().map { file ->
         reflectiveScanner.scan(ReflectiveCallArgExtractor.extract(file), file.path)
     }.toList().flatten()
 
     val allFindings = embeddedFindings + reflectiveFindings
     // Allowlisting one declaring class of a hierarchy (e.g. only 'KotlinCompile.kotlinOptions')
-    // suppresses the whole logical deprecation, not just that one sibling class - otherwise a
-    // developer would have to enumerate every class the report groups under 'Declared in: ...'.
+    // suppresses the whole logical deprecation, not just that one sibling class
     val allowlistedGroups = allFindings
-        .filter { it.symbol in allowlist }
+        .filter { it.symbol in config.allowlist }
         .map { it.deprecationId to it.message }
         .toSet()
-    val findings = allFindings.filterNot { (it.deprecationId to it.message) in allowlistedGroups }
+    val filteredFindings = allFindings.filterNot { (it.deprecationId to it.message) in allowlistedGroups }
     // One call site of an inherited/default member matches every class of the hierarchy that
     // declares it; counts and the exit gate must see it as a single usage.
-    val usages = findings.distinctBy { listOf(it.file, it.line, it.column, it.deprecationId, it.message) }
+    val usages = filteredFindings.distinctBy { listOf(it.file, it.line, it.column, it.deprecationId, it.message) }
 
-    val scannedLine = "Scanned ${candidates.size} embedded-script candidate file(s), ${reflectiveCandidates.size} reflective-call candidate file(s)."
-    val summaryLine = reportSummaryLine(usages)
     // Printed whenever target symbols were requested, independently of whether there are any
-    // (unrelated) findings elsewhere - this is what makes a 'READY, 0 usages' verdict trustworthy
-    // instead of ambiguous with 'the symbol was never indexed at all'.
-    val targetCheck = targetSymbolCheck(targetSymbols, index, allFindings, allowlistedGroups)
+    // (unrelated) findings elsewhere
+    val targetCheck = targetSymbolCheck(config.targetSymbols, indexData.symbols, allFindings, allowlistedGroups)
 
-    if (reportFilePath != null) {
-        println(scannedLine)
-        println()
+    return ScanResult(
+        index = indexData.symbols,
+        embeddedCandidateCount = candidates.size,
+        reflectiveCandidateCount = reflectiveCandidates.size,
+        allFindings = allFindings,
+        allowlistedGroups = allowlistedGroups,
+        filteredFindings = filteredFindings,
+        usages = usages,
+        banner = banner,
+        targetCheck = targetCheck,
+    )
+}
+
+/**
+ * Outputs the scan results to console/report file and emits TeamCity service messages.
+ */
+internal fun publishReport(config: DetectorConfig, result: ScanResult) {
+    print(result.banner)
+    println()
+    println(result.scannedLine)
+    println()
+
+    if (config.reportFilePath != null) {
         println("Generating report...")
-        writeReportFile(
-            reportFilePath,
-            buildString {
-                append(banner)
-                appendLine()
-                appendLine(scannedLine)
-                appendLine()
-                if (targetCheck.isNotEmpty()) {
-                    append(targetCheck)
-                    appendLine()
-                }
-                if (usages.isEmpty()) {
-                    appendLine(summaryLine)
-                } else {
-                    append(executiveSummary(usages))
-                    appendLine()
-                    append(quickIndex(findings))
-                    appendLine()
-                    append(reportDetails(findings))
-                }
-            },
-        )
-        println(summaryLine)
-        println("Report is ready, check in: $reportFilePath")
+        writeReportFile(config.reportFilePath, result.buildReportContent())
+        println(result.summaryLine)
+        println("Report is ready, check in: ${config.reportFilePath}")
     } else {
-        println(scannedLine)
-        println()
-        if (targetCheck.isNotEmpty()) {
-            print(targetCheck)
+        if (result.targetCheck.isNotEmpty()) {
+            print(result.targetCheck)
             println()
         }
-        if (usages.isEmpty()) {
-            println(summaryLine)
+        if (result.usages.isEmpty()) {
+            println(result.summaryLine)
         } else {
-            print(executiveSummary(usages))
+            print(executiveSummary(result.usages))
             println()
-            print(quickIndex(findings))
+            print(quickIndex(result.filteredFindings))
             println()
-            print(reportDetails(findings))
+            print(reportDetails(result.filteredFindings))
         }
     }
 
-    val errors = usages.count { it.level == DeprecationLevel.ERROR }
-    val hidden = usages.count { it.level == DeprecationLevel.HIDDEN }
-
-    val isTeamCity = isRunningOnTeamCity()
-    if (isTeamCity) {
-        println("##teamcity[buildStatus text='${escapeTc(summaryLine)}']")
-        if (errors > 0 || hidden > 0) {
-            val reportFileName = reportFilePath?.let { File(it).name }
+    if (isRunningOnTeamCity()) {
+        println("##teamcity[buildStatus text='${escapeTc(result.summaryLine)}']")
+        if (result.hasFailures) {
+            val reportFileName = config.reportFilePath?.let { File(it).name }
             val problemDescription = if (reportFileName != null) {
-                "KGP deprecation check FAILED: $summaryLine Check artifact '$reportFileName'."
+                "KGP deprecation check FAILED: ${result.summaryLine} Check artifact '$reportFileName'."
             } else {
-                "KGP deprecation check FAILED: $summaryLine"
+                "KGP deprecation check FAILED: ${result.summaryLine}"
             }
             println("##teamcity[buildProblem description='${escapeTc(problemDescription)}' identity='kgpDeprecations']")
         }
     }
 
     // WARNING passes; ERROR/HIDDEN fails
-    return if (errors > 0 || hidden > 0) {
+    if (result.hasFailures) {
         System.err.println("Result: FAIL")
-        EXIT_FINDINGS
     } else {
         println("Result: OK")
-        0
     }
 }
 
@@ -232,18 +178,7 @@ private fun writeReportFile(path: String, content: String) {
     reportFile.writeText(content)
 }
 
-private fun loadAllowlist(file: File): Set<String>? {
-    if (!file.exists()) {
-        System.err.println("Allowlist file not found: ${file.path}")
-        return null
-    }
-    return file.readLines()
-        .map { it.substringBefore('#').trim() }
-        .filter { it.isNotEmpty() }
-        .toSet()
-}
-
-private fun reportSummaryLine(findings: List<Finding>): String {
+internal fun reportSummaryLine(findings: List<Finding>): String {
     if (findings.isEmpty()) {
         return "No deprecated API usages found in embedded scripts or reflective calls."
     }
@@ -361,16 +296,9 @@ internal fun reportDetails(findings: List<Finding>): String = buildString {
 }
 
 /**
- * Explicit found/not-found verdict for symbols the caller cares about (e.g. the ticket's target
- * API), independent of whether they have usages. Without this, '0 usages' is ambiguous between
- * 'indexed, genuinely unused' and 'not in this jar at all' (wrong version, typo, already removed).
- * Matching mirrors the scanner: both the raw member name and its getter/setter-normalized
- * [DeprecatedSymbol.searchName] are tried, so a caller can say either 'enabledLanguageFeatures' or
- * 'getEnabledLanguageFeatures' and match the same indexed symbol.
- *
- * Takes [allFindings] (before allowlist filtering) plus [allowlistedGroups] rather than the final
- * (post-allowlist) findings, so a caller can tell 'genuinely 0 usages' apart from 'usages exist but
- * are all suppressed by the allowlist' - both would otherwise collapse to the same '0'.
+ * Checks requested target symbols against indexed deprecations and findings.
+ * Distinguishes not-indexed symbols, genuinely unused APIs (0 usages), and allowlisted usages.
+ * Matches both raw member names and getter/setter-normalized [DeprecatedSymbol.searchName].
  */
 internal fun targetSymbolCheck(
     requestedSymbols: List<String>,
@@ -435,14 +363,4 @@ private fun sourceLineWithCaret(finding: Finding): List<String>? {
     val line = runCatching { File(finding.file).readLines().getOrNull(finding.line - 1) }.getOrNull() ?: return null
     val caret = " ".repeat((finding.column - 1).coerceAtLeast(0)) + "^"
     return listOf(line, caret)
-}
-
-private fun printHelpUsage() {
-    System.err.println("Usage: kgp-deprecation-detector <scan-root> [<allowlist-file>]")
-    System.err.println("  scan-root       Root directory to scan for embedded Gradle scripts in .kt/.java.")
-    System.err.println("  allowlist-file  Optional. One deprecated-symbol qualified name per line; '#' starts a comment.")
-    System.err.println()
-    System.err.println("As a Gradle task:")
-    System.err.println("  ./gradlew checkKgpDeprecations [-PmonorepoDir=<path>] [-Pallowlist=<path>] [-PkgpEngineVersion=<ver>]")
-    System.err.println("    [-PexcludePatterns=/foo/,/bar/] [-PreportFile=<path>] [-PfullIndex] [-PtargetSymbols=name1,name2]")
 }

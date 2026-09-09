@@ -6,14 +6,11 @@ plugins {
 }
 
 kotlin {
-    // Pins toolchain to ensure consistent bytecode across environments.
     jvmToolchain(21)
 }
 
-/**
- * Validates -P properties to prevent typos.
- * Gradle silently ignores unknown ones.
- */
+// 1. Property Validation (Catch CLI typos early)
+
 val knownProjectProperties = setOf(
     "monorepoDir",
     "buildScan",
@@ -28,12 +25,12 @@ val knownProjectProperties = setOf(
 )
 
 run {
-    // Only validate command-line -P properties (skip namespaced ones).
     val unknown = gradle.startParameter.projectProperties.keys
         .filter { "." !in it && it !in knownProjectProperties }
     if (unknown.isNotEmpty()) {
         val details = unknown.joinToString("\n") { name ->
-            val suggestion = knownProjectProperties.minByOrNull { levenshtein(name.lowercase(), it.lowercase()) }
+            val suggestion = knownProjectProperties
+                .minByOrNull { levenshtein(name.lowercase(), it.lowercase()) }
                 ?.takeIf { levenshtein(name.lowercase(), it.lowercase()) <= 4 }
             "  -P$name" + (suggestion?.let { " (did you mean -P$it?)" } ?: "")
         }
@@ -44,7 +41,6 @@ run {
     }
 }
 
-/** Levenshtein distance for property name suggestions. */
 fun levenshtein(a: String, b: String): Int {
     var previous = IntArray(b.length + 1) { it }
     for (i in 1..a.length) {
@@ -59,13 +55,8 @@ fun levenshtein(a: String, b: String): Int {
     return previous[b.length]
 }
 
-/**
- * Reads the number of the build matching a TeamCity locator, or null if there is none (or the
- * server cannot be reached).
- *
- * A `ValueSource` rather than a plain HTTP read: the configuration cache re-evaluates it on every
- * run, so "latest" cannot silently stay pinned to yesterday's build on a reused agent.
- */
+// 2. KGP Version & Repository Resolution
+
 abstract class TeamCityBuildNumber : ValueSource<String, TeamCityBuildNumber.Parameters> {
     interface Parameters : ValueSourceParameters {
         val url: Property<String>
@@ -73,7 +64,6 @@ abstract class TeamCityBuildNumber : ValueSource<String, TeamCityBuildNumber.Par
 
     override fun obtain(): String? = runCatching {
         val connection = URI(parameters.url.get()).toURL().openConnection()
-        // Bounded: this runs at configuration time, including for './gradlew build' off the network.
         connection.connectTimeout = 5_000
         connection.readTimeout = 10_000
         connection.getInputStream().use { it.reader().readText() }.trim()
@@ -81,9 +71,6 @@ abstract class TeamCityBuildNumber : ValueSource<String, TeamCityBuildNumber.Par
 }
 
 val teamcityServer = "https://buildserver.labs.intellij.net"
-
-// TeamCity configuration the KGP jars are taken from. Its build numbers are the KGP versions
-// ("2.5.0-dev-6260"). Override with -PkgpBuildType to index a release branch instead of master.
 val kgpBuildType = (findProperty("kgpBuildType") as String?)?.takeIf { it.isNotBlank() }
     ?: "Kotlin_KotlinDev_Artifacts"
 
@@ -91,11 +78,6 @@ fun teamcityBuildNumber(locator: String): String? = providers.of(TeamCityBuildNu
     parameters.url.set("$teamcityServer/guestAuth/app/rest/builds/$locator/number")
 }.orNull
 
-val buildTypeUrl = "$teamcityServer/buildConfiguration/$kgpBuildType"
-
-// KGP version to index. Override with -PkgpEngineVersion; "latest" is the last successful build.
-// There is no hard-coded default version on purpose: a build's artifacts are cleaned up over time,
-// so any pinned default would rot.
 val requestedVersion = (findProperty("kgpEngineVersion") as String?)?.takeIf { it.isNotBlank() } ?: "latest"
 val isLatest = requestedVersion.equals("latest", ignoreCase = true)
 val tcBuildNumber = if (isLatest) {
@@ -108,16 +90,12 @@ val isTeamCityBuild = tcBuildNumber != null
 val engineVersion = tcBuildNumber ?: requestedVersion
 val engineSource = if (isTeamCityBuild) "TeamCity $kgpBuildType" else "Maven (Central / kt-dev)"
 
-// Reported by the check task, not thrown here: only that task needs the jars, so 'build' (unit
-// tests, pure offline ASM) must keep working without TeamCity.
 val versionProblem = when {
-    isLatest && !isTeamCityBuild -> "Cannot ask TeamCity for the latest build of '$kgpBuildType' ($buildTypeUrl).\n" +
-        "Connect to the JetBrains network, or pin a version with -PkgpEngineVersion=<version>."
+    isLatest && !isTeamCityBuild -> "Cannot ask TeamCity for latest build of '$kgpBuildType'.\n" +
+        "Connect to JetBrains network, or pin version via -PkgpEngineVersion=<version>."
     else -> null
 }
 
-// The build publishes its whole Maven repository as a single 'maven.zip' artifact; TeamCity serves
-// files from inside an archive, so the artifact is usable as a Maven repository as is.
 val kgpRepoUrl = if (isTeamCityBuild) {
     "$teamcityServer/guestAuth/app/rest/builds/" +
         "buildType:(id:$kgpBuildType),number:$engineVersion,branch:default:any/artifacts/content/maven.zip!/"
@@ -129,7 +107,6 @@ repositories {
         name = "kotlinDevRepo"
         setUrl("https://packages.jetbrains.team/maven/p/kt/dev")
     }
-    // If resolved from a TeamCity build, 'exclusiveContent' routes that specific version to TeamCity maven.zip
     if (kgpRepoUrl != null) {
         exclusiveContent {
             forRepository {
@@ -143,104 +120,92 @@ repositories {
     }
 }
 
-dependencies {
-    // ASM: reads @Deprecated members from jars without class loading
-    implementation("org.ow2.asm:asm:9.10.1")
+// 3. Dependencies
 
-    testImplementation(kotlin("test"))
-}
-
-// KGP jars for the indexed version
 val kgpJars = configurations.create("kgpJars")
+
 dependencies {
+    implementation("org.ow2.asm:asm:9.10.1")
+    testImplementation(kotlin("test"))
     kgpJars("org.jetbrains.kotlin:kotlin-gradle-plugin:$engineVersion")
 }
 
+// 4. Main Verification Task
 
-/**
- * Resolves scan root at configuration time to catch invalid paths early.
- */
 fun resolveScanRoot(): File {
     val raw = findProperty("monorepoDir")?.toString()?.takeIf { it.isNotBlank() } ?: "test-monorepo"
     val given = File(raw)
     val resolved = if (given.isAbsolute) given else layout.projectDirectory.asFile.resolve(raw)
     if (!resolved.isDirectory) {
         throw GradleException(
-            "-PmonorepoDir does not point at a directory:\n  given   : $raw\n  resolved: ${resolved.path}\n" +
-                "Pass an existing directory (absolute, or relative to ${layout.projectDirectory.asFile.path})."
+            "-PmonorepoDir does not point at a directory:\n  given   : $raw\n  resolved: ${resolved.path}"
         )
     }
     return resolved.canonicalFile
 }
 
-/** Main verification task **/
 tasks.register<JavaExec>("checkKgpDeprecations") {
     group = "verification"
     description = "Scans .kt/.java for embedded Gradle scripts using deprecated KGP APIs."
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass.set("org.jetbrains.kotlin.deprecations.MainKt")
+    outputs.upToDateWhen { false }
+
     versionProblem?.let { throw GradleException(it) }
-    // Surface indexed KGP version and where its jars came from in the banner
+
+    // Core execution properties
     systemProperty("kgp.engineVersion", engineVersion)
     systemProperty("kgp.engineSource", engineSource)
-    // Lazy resolution of KGP jars. Must not be a Provider for systemProperty compatibility.
     systemProperty("kgp.pluginJars", kgpJars.asPath)
-    // Verification must always run
-    outputs.upToDateWhen { false }
-    findProperty("excludePatterns")?.toString()?.takeIf { it.isNotBlank() }
-        ?.let { systemProperty("kgp.excludePatterns", it) }
-    // -PfullIndex includes internal/Android packages
+
+    // Forward optional -P properties cleanly
+    fun forward(projectProp: String, systemProp: String = "kgp.$projectProp") {
+        findProperty(projectProp)?.toString()?.takeIf { it.isNotBlank() }?.let {
+            systemProperty(systemProp, it)
+        }
+    }
+    forward("excludePatterns")
+    forward("rgPath")
+    forward("targetSymbols")
     findProperty("fullIndex")?.let {
         systemProperty("kgp.fullIndex", it.toString().takeIf { v -> v.isNotBlank() } ?: "true")
     }
-    // -PrgPath pins an explicit ripgrep binary, bypassing PATH (some CI runners recompute PATH
-    // internally, e.g. TeamCity's Gradle step with jdkHome set, silently dropping PATH prepends).
-    findProperty("rgPath")?.toString()?.takeIf { it.isNotBlank() }
-        ?.let { systemProperty("kgp.rgPath", it) }
-    // -PtargetSymbols asks for an explicit found/not-found verdict (with real usage count) for
-    // specific symbols, so a caller never has to infer "0 usages" vs "not indexed at all".
-    findProperty("targetSymbols")?.toString()?.takeIf { it.isNotBlank() }
-        ?.let { systemProperty("kgp.targetSymbols", it) }
 
-    // Forward TeamCity detection if present
-    findProperty("teamcity.version")?.toString()?.takeIf { it.isNotBlank() }
-        ?.let { systemProperty("teamcity.version", it) }
-    System.getenv("TEAMCITY_VERSION")?.takeIf { it.isNotBlank() }
-        ?.let { systemProperty("teamcity.version", it) }
-
-    // Mirror output to file if -PreportFile is set
+    // Report file path
     val reportFile = findProperty("reportFile")?.toString()?.takeIf { it.isNotBlank() }
         ?: layout.buildDirectory.file("reports/kgp-deprecations.txt").get().asFile.path
     systemProperty("kgp.reportFile", reportFile)
 
+    // Positional arguments: [scanRoot, allowlist]
     val monorepo = resolveScanRoot().path
     val allowlistArg = findProperty("allowlist")?.toString().orEmpty()
     args = listOf(monorepo, allowlistArg)
 
+    // TeamCity environment detection
     val isTeamCity = !System.getenv("TEAMCITY_VERSION").isNullOrBlank() ||
         !System.getProperty("teamcity.version").isNullOrBlank() ||
         findProperty("teamcity.version")?.toString()?.isNotBlank() == true
+    if (isTeamCity) {
+        systemProperty("teamcity.version", "true")
+    }
 
-    // Gradle turns any non-zero exit into its own generic failure, hiding the
-    // tool's 1 (findings) vs 2 (setup failure) distinction. Inspect it ourselves.
+    // Inspect exit code directly to handle findings (1) vs setup errors (2)
     isIgnoreExitValue = true
     val result = executionResult
     doLast {
         when (val code = result.get().exitValue) {
             0 -> Unit
             1 -> {
-                if (isTeamCity) {
-                    // Main.kt already emitted ##teamcity[buildProblem]. Completing cleanly
-                    // marks the build failed without redundant errors or stack trace noise.
-                } else {
+                if (!isTeamCity) {
                     throw GradleException(
                         "KGP deprecation check FAILED: deprecated API usages found. See the report above."
                     )
                 }
+                // In Main.kt, ##teamcity[buildProblem] was already emitted. Exiting cleanly
+                // marks the build failed without duplicate errors or 100-line stack trace noise.
             }
             2 -> throw GradleException(
-                "KGP deprecation check DID NOT RUN (setup failure, exit 2). " +
-                    "The check produced no verdict - fix the invocation and re-run."
+                "KGP deprecation check DID NOT RUN (setup failure, exit 2). Fix the invocation and re-run."
             )
             else -> throw GradleException("KGP deprecation check exited unexpectedly with code $code.")
         }
