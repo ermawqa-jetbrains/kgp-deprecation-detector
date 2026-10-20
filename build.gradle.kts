@@ -102,7 +102,6 @@ val kgpRepoUrl = if (isTeamCityBuild) {
 } else null
 
 repositories {
-    mavenCentral()
     maven {
         name = "kotlinDevRepo"
         setUrl("https://packages.jetbrains.team/maven/p/kt/dev")
@@ -119,6 +118,10 @@ repositories {
             }
             filter { includeVersionByRegex("org\\.jetbrains\\.kotlin(\\..+)?", ".+", Regex.escape(engineVersion)) }
         }
+    }
+    // Cache-redirector mirror, declared last so the Kotlin-specific repos are tried first.
+    mavenCentral {
+        url = URI("https://cache-redirector.jetbrains.com/maven-central")
     }
 }
 
