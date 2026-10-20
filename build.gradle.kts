@@ -106,6 +106,8 @@ repositories {
     maven {
         name = "kotlinDevRepo"
         setUrl("https://packages.jetbrains.team/maven/p/kt/dev")
+        // Only KGP/Kotlin artifacts live here; keeps other dependencies off this repo.
+        content { includeGroupByRegex("org\\.jetbrains\\.kotlin(\\..+)?") }
     }
     if (kgpRepoUrl != null) {
         exclusiveContent {
