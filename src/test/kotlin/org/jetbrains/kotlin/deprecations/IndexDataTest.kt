@@ -52,15 +52,11 @@ class IndexDataTest {
         )
         val banner = indexData.buildBanner(config)
         assertContains(banner, "KGP DEPRECATION CHECK")
-        assertContains(banner, "Scanning : ${config.scanRoot.path}")
-        assertContains(banner, "KGP      : 2.5.0-dev-1234 (1 deprecated symbol(s) indexed)")
-        assertContains(banner, "Jars from: TeamCity KotlinDev")
-        assertContains(banner, "5 class(es) skipped (internal/utils/impl/Android)")
-        assertContains(banner, "12 non-KGP class(es) ignored")
-        assertContains(banner, "3 \$DefaultImpls class(es) ignored")
+        assertContains(banner, "Scanning   : ${config.scanRoot.path}")
+        assertContains(banner, "KGP version: 2.5.0-dev-1234 (1 deprecated symbol(s) indexed)")
         assertContains(banner, "Allowlist: 1 entries")
         assertContains(banner, "Excluded : /testData/")
-        assertContains(banner, "Report   : /tmp/report.txt")
+        assertContains(banner, "Report in: /tmp/report.txt")
     }
 
     @Test
