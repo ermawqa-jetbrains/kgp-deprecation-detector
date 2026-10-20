@@ -231,26 +231,10 @@ Pass 2 (reflective calls):
   graph, so `./gradlew help` never resolves the configuration). It must NOT be a `Provider`:
   `JavaExec.systemProperty` does not unwrap one and passes its `toString()` through, which the
   tool then reports as `Failed to read KGP jar 'map(provider(...))'`.
-- **KGP jars come from a TeamCity build, not from a published Maven repository.** The scan is run
-  while a deprecation phase is being prepared, i.e. against KGP built from Kotlin master before it
-  is deployed anywhere, so `packages.jetbrains.team/maven/p/kt/dev` was replaced by the
-  `maven.zip` artifact of `-PkgpBuildType` (default `Kotlin_KotlinDev_Artifacts`), which TeamCity
-  serves from inside the archive (`.../artifacts/content/maven.zip!/`) over guest auth — no
-  credentials, but the JetBrains network is required. Consequences that are easy to break:
-  - **A version IS a build number** (`2.5.0-dev-6260`); a released version like `2.4.10` does not
-    exist there. That is checked against the REST API up front, so the user gets "no build
-    numbered X, pick one at <url>" instead of "Could not find kotlin-gradle-plugin:2.4.10".
-  - **No default version is hard-coded** — a build's artifacts are cleaned up, so a pinned default
-    would rot. `latest` (the default) asks TeamCity for the last successful build.
-  - **The lookup is a `ValueSource`**, not a plain `URL.readText()`: the configuration cache
-    re-evaluates it on every run, so `latest` cannot stay pinned to yesterday's build on an agent
-    that reuses its checkout. It also has connect/read timeouts.
-  - **An unresolvable version fails the *task*, not the configuration** (`versionProblem` is
-    thrown inside `tasks.register`): `./gradlew build` (unit tests, pure offline ASM) must keep
-    working without TeamCity.
-  - **The repository is `exclusiveContent`-scoped** to `org.jetbrains.kotlin*` at exactly that
-    version, so mavenCentral keeps serving everything else (ASM, `kotlin-test`, the build's own
-    stdlib) and no lookup for that version leaks to mavenCentral.
+- **KGP jars on TeamCity come from ArtifactsAggregate via an artifact dependency.**
+  The scan depends on `ArtifactsAggregate`, which unpacks `maven.zip` into `artifacts/maven` on
+  the agent, passed as `-PlocalRepoDir`. Local runs resolve from `packages.jetbrains.team/maven/p/kt/dev`
+  or `mavenCentral` via the cache-redirector mirror.
 - **`jvmToolchain(21)` is pinned.** The tool reads bytecode with ASM; "whatever JDK is on PATH"
   made local runs (JDK 26 here) and CI compile to different bytecode with a different behaviour
   surface. 21 is also what the TeamCity step runs (`jdkHome = "%env.JDK_21_0%"`).
@@ -317,7 +301,7 @@ Pass 2 (reflective calls):
 ./gradlew checkKgpDeprecations -PmonorepoDir=<path> -Pallowlist=<file>
 ```
 
-Flags: `-Pallowlist` `-PkgpEngineVersion` `-PkgpBuildType` `-PexcludePatterns` `-PreportFile`
+Flags: `-Pallowlist` `-PkgpEngineVersion` `-PlocalRepoDir` `-PexcludePatterns` `-PreportFile`
 `-PfullIndex` `-PrgPath` `-PtargetSymbols` `-PbuildScan`. See README.
 
 ## Repo
@@ -332,7 +316,7 @@ made there are invisible to CI.
   from the root, and its default patterns (`**/*.kt`, `**/*.kts`) **include this directory** — a
   missing final newline in `settings.gradle.kts` failed it once.
 - The TeamCity configuration is `.teamcity/infra/subprojects/kgpDeprecationDetector/`, registered
-  in `Kotlin_Service.kt`. One commit can change the tool, its allowlist and its build config; the
+  in `service/ServiceProject.kt`. One commit can change the tool, its allowlist and its build config; the
   run's VCS revision is the detector version.
 - Settings are generated on JDK 21 (`mvn process-sources teamcity-configs:generate@kotlin-service`
   inside `.teamcity`); a newer JDK breaks the Kotlin 2.0.21 Maven compiler.

@@ -16,7 +16,7 @@ val knownProjectProperties = setOf(
     "buildScan",
     "allowlist",
     "kgpEngineVersion",
-    "kgpBuildType",
+    "localRepoDir",
     "excludePatterns",
     "reportFile",
     "fullIndex",
@@ -55,69 +55,24 @@ fun levenshtein(a: String, b: String): Int {
     return previous[b.length]
 }
 
-// 2. KGP Version & Repository Resolution
+// 2. Repositories
 
-abstract class TeamCityBuildNumber : ValueSource<String, TeamCityBuildNumber.Parameters> {
-    interface Parameters : ValueSourceParameters {
-        val url: Property<String>
-    }
-
-    override fun obtain(): String? = runCatching {
-        val connection = URI(parameters.url.get()).toURL().openConnection()
-        connection.connectTimeout = 5_000
-        connection.readTimeout = 10_000
-        connection.getInputStream().use { it.reader().readText() }.trim()
-    }.getOrNull()?.takeIf { it.isNotBlank() }
-}
-
-val teamcityServer = "https://buildserver.labs.intellij.net"
-val kgpBuildType = (findProperty("kgpBuildType") as String?)?.takeIf { it.isNotBlank() }
-    ?: "Kotlin_KotlinDev_Artifacts"
-
-fun teamcityBuildNumber(locator: String): String? = providers.of(TeamCityBuildNumber::class) {
-    parameters.url.set("$teamcityServer/guestAuth/app/rest/builds/$locator/number")
-}.orNull
-
-val requestedVersion = (findProperty("kgpEngineVersion") as String?)?.takeIf { it.isNotBlank() } ?: "latest"
-val isLatest = requestedVersion.equals("latest", ignoreCase = true)
-val tcBuildNumber = if (isLatest) {
-    teamcityBuildNumber("buildType:(id:$kgpBuildType),status:SUCCESS,branch:default:any")
-} else {
-    teamcityBuildNumber("buildType:(id:$kgpBuildType),number:$requestedVersion,branch:default:any")
-}
-
-val isTeamCityBuild = tcBuildNumber != null
-val engineVersion = tcBuildNumber ?: requestedVersion
-val engineSource = if (isTeamCityBuild) "TeamCity $kgpBuildType" else "Maven (Central / kt-dev)"
-
-val versionProblem = when {
-    isLatest && !isTeamCityBuild -> "Cannot ask TeamCity for latest build of '$kgpBuildType'.\n" +
-        "Connect to JetBrains network, or pin version via -PkgpEngineVersion=<version>."
-    else -> null
-}
-
-val kgpRepoUrl = if (isTeamCityBuild) {
-    "$teamcityServer/guestAuth/app/rest/builds/" +
-        "buildType:(id:$kgpBuildType),number:$engineVersion,branch:default:any/artifacts/content/maven.zip!/"
-} else null
+val localRepoDir = findProperty("localRepoDir")?.toString()?.takeIf { it.isNotBlank() }
+val engineVersion = findProperty("kgpEngineVersion")?.toString()?.takeIf { it.isNotBlank() } ?: "2.4.10"
+val engineSource = if (localRepoDir != null) "TeamCity Artifacts ($localRepoDir)" else "Maven (Central / kt-dev)"
 
 repositories {
+    if (localRepoDir != null) {
+        maven {
+            name = "localArtifactsRepo"
+            setUrl(File(localRepoDir).toURI())
+        }
+    }
     maven {
         name = "kotlinDevRepo"
         setUrl("https://packages.jetbrains.team/maven/p/kt/dev")
         // Only KGP/Kotlin artifacts live here; keeps other dependencies off this repo.
         content { includeGroupByRegex("org\\.jetbrains\\.kotlin(\\..+)?") }
-    }
-    if (kgpRepoUrl != null) {
-        exclusiveContent {
-            forRepository {
-                maven {
-                    name = "kotlinTeamCityBuild"
-                    setUrl(kgpRepoUrl)
-                }
-            }
-            filter { includeVersionByRegex("org\\.jetbrains\\.kotlin(\\..+)?", ".+", Regex.escape(engineVersion)) }
-        }
     }
     // Cache-redirector mirror, declared last so the Kotlin-specific repos are tried first.
     mavenCentral {
@@ -155,8 +110,6 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass.set("org.jetbrains.kotlin.deprecations.MainKt")
     outputs.upToDateWhen { false }
-
-    versionProblem?.let { throw GradleException(it) }
 
     // Core execution properties
     systemProperty("kgp.engineVersion", engineVersion)

@@ -65,8 +65,8 @@ Run the detector against a target repository or directory using Gradle:
 | Parameter | Description | Default |
 | :--- | :--- | :--- |
 | `-PmonorepoDir` | Target directory to scan (`.kt`/`.java` files) | `test-monorepo` |
-| `-PkgpEngineVersion` | KGP version from Maven Central (e.g. `2.4.10`, `2.1.20`) or TeamCity build number (`latest`, `2.5.0-dev-6617`) | `latest` |
-| `-PkgpBuildType` | TeamCity build configuration when resolving dev artifacts | `Kotlin_KotlinDev_Artifacts` |
+| `-PkgpEngineVersion` | KGP version from Maven Central (e.g. `2.4.10`, `2.1.20`) | `2.4.10` |
+| `-PlocalRepoDir` | Path to local repository directory containing KGP artifacts (used by TeamCity) | `(none)` |
 | `-Pallowlist` | Path to allowlist file (e.g. `config/allowlist-intellij.txt`) | `(none)` |
 | `-PtargetSymbols` | Comma-separated symbol names to audit explicitly (verifies if present in jar, usages, allowlist state) | `(none)` |
 | `-PreportFile` | Output file path for full findings report | `build/reports/kgp-deprecations.txt` |
