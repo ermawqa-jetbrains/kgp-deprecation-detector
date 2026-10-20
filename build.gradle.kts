@@ -13,14 +13,9 @@ kotlin {
 
 val knownProjectProperties = setOf(
     "monorepoDir",
-    "buildScan",
-    "allowlist",
     "kgpEngineVersion",
     "localRepoDir",
     "excludePatterns",
-    "reportFile",
-    "fullIndex",
-    "rgPath",
     "targetSymbols",
 )
 
@@ -123,20 +118,16 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
         }
     }
     forward("excludePatterns")
-    forward("rgPath")
     forward("targetSymbols")
-    findProperty("fullIndex")?.let {
-        systemProperty("kgp.fullIndex", it.toString().takeIf { v -> v.isNotBlank() } ?: "true")
-    }
 
     // Report file path
-    val reportFile = findProperty("reportFile")?.toString()?.takeIf { it.isNotBlank() }
-        ?: layout.buildDirectory.file("reports/kgp-deprecations.txt").get().asFile.path
+    val reportFile = layout.buildDirectory.file("reports/kgp-deprecations.txt").get().asFile.path
     systemProperty("kgp.reportFile", reportFile)
 
     // Positional arguments: [scanRoot, allowlist]
     val monorepo = resolveScanRoot().path
-    val allowlistArg = findProperty("allowlist")?.toString().orEmpty()
+    val defaultAllowlist = layout.projectDirectory.file("config/allowlist-intellij.txt").asFile
+    val allowlistArg = if (defaultAllowlist.exists()) defaultAllowlist.path else ""
     args = listOf(monorepo, allowlistArg)
 
     // TeamCity environment detection

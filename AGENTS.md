@@ -152,10 +152,10 @@ Pass 2 (reflective calls):
   in-content column already is the host column. Pinned by
   `columnOnLinesAfterTheFirstIsAlreadyAbsolute` and
   `columnOnTheFirstLineIsShiftedByTheLiteralStart`.
-- **The index's `internal`/`utils`/`impl`/`Android` filter is opt-out and its cost is printed.**
+- **The index's `internal`/`utils`/`impl`/`Android` filter is applied by default and its cost is printed.**
   `KgpDeprecationExtractor.extractIndex(jar, fullIndex)` returns the skipped-class count, which
-  `Main` prints in the banner (~4900 classes / 145 symbols on KGP 2.4.0); `-PfullIndex`
-  (`kgp.fullIndex`) disables it. KGP ships public API under `impl`/`utils` and an `Android*`
+  `Main` prints in the banner (~4900 classes / 145 symbols on KGP 2.4.0); `fullIndex` defaults to false.
+  KGP ships public API under `impl`/`utils` and an `Android*`
   symbol is exactly what an AGP-injected init script touches, so a silent unconditional filter
   was hiding real coverage. `extract(jar)` remains as the symbols-only convenience.
 - **The index is hard-scoped to `KgpDeprecationExtractor.PACKAGE_SCOPE` (`org.jetbrains.kotlin`).**
@@ -206,11 +206,8 @@ Pass 2 (reflective calls):
   narrower than the extractor's would silently lose candidates. `EmbeddedScriptExtractor` now
   builds its `Regex` directly from `EmbeddedScriptFinder.MARKER` instead of its own copy. Pinned
   by `EmbeddedScriptMarkerTest`.
-- **`-PrgPath` exists because PATH is not reliable on CI.** `SourceFileFinder` invokes
-  `System.getProperty("kgp.rgPath")` and only falls back to a bare `rg`. TeamCity's Gradle runner
-  recomputes PATH internally when `jdkHome` is set, so an `env.PATH` prepend was silently dropped
-  and every CI run degraded to the walk fallback while the preceding step reported `rg` as cached.
-  Pass the executable, don't hope for PATH.
+- **The ripgrep path uses `rg` on PATH (with walk fallback).** `SourceFileFinder` invokes
+  `System.getProperty("kgp.rgPath")` and falls back to a bare `rg`.
 - **The ripgrep path catches `Exception`, not just `IOException`, and redirects stderr.** A
   missing `rg` throws `IOException`, but a `SecurityException` or an interrupted `waitFor` used
   to kill the whole run instead of degrading to the walk; `redirectErrorStream(true)` removes the
@@ -238,13 +235,7 @@ Pass 2 (reflective calls):
 - **`jvmToolchain(21)` is pinned.** The tool reads bytecode with ASM; "whatever JDK is on PATH"
   made local runs (JDK 26 here) and CI compile to different bytecode with a different behaviour
   surface. 21 is also what the TeamCity step runs (`jdkHome = "%env.JDK_21_0%"`).
-- **The Develocity build scan is opt-in**: the plugin is declared `apply false` and applied only
-  when `-PbuildScan` is present (registered in `knownProjectProperties`). Publishing on every
-  build made the check depend on reaching `ge.labs.jb.gg`, which an offline/network-restricted CI
-  agent cannot do. `publishing.onlyIf { }` is the obvious shape and does NOT work here — the
-  plugin cannot serialize a settings-script lambda into the configuration cache (it fails the
-  build with "cannot serialize Gradle script object references"), and merely leaving `server`
-  unset still prints a scan-not-published notice on every run.
+- **Build scans are no longer used**: the Develocity plugin and `-PbuildScan` property were removed.
 - **The allowlist must stay auditable: a reason per entry.** It is a plain list of qualified
   names, one per line, with `#` starting a comment; every entry must be preceded by a `#` comment
   explaining why it is a false positive. Pinned by `AllowlistTest`, which fails on an entry with
@@ -298,11 +289,10 @@ Pass 2 (reflective calls):
 ```bash
 ./gradlew build                          # compile + unit tests (offline ASM; TeamCity not required)
 ./gradlew checkKgpDeprecations           # run against bundled test-monorepo fixture
-./gradlew checkKgpDeprecations -PmonorepoDir=<path> -Pallowlist=<file>
+./gradlew checkKgpDeprecations -PmonorepoDir=<path>
 ```
 
-Flags: `-Pallowlist` `-PkgpEngineVersion` `-PlocalRepoDir` `-PexcludePatterns` `-PreportFile`
-`-PfullIndex` `-PrgPath` `-PtargetSymbols` `-PbuildScan`. See README.
+Flags: `-PkgpEngineVersion` `-PlocalRepoDir` `-PexcludePatterns` `-PtargetSymbols`. See README.
 
 ## Repo
 

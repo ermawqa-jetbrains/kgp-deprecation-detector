@@ -19,7 +19,7 @@ internal data class IndexData(
         appendLine("  KGP      : ${config.engineVersion ?: "(version unknown)"} (${symbols.size} deprecated symbol(s) indexed)")
         if (config.engineSource != null) appendLine("  Jars from: ${config.engineSource}")
         if (skippedClasses > 0) {
-            appendLine("  Index    : $skippedClasses class(es) skipped (internal/utils/impl/Android) - pass -PfullIndex to include them")
+            appendLine("  Index    : $skippedClasses class(es) skipped (internal/utils/impl/Android)")
         }
         appendLine(
             "  Scope    : ${KgpDeprecationExtractor.PACKAGE_SCOPE}.*" +

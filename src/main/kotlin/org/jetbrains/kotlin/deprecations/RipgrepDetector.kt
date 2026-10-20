@@ -18,9 +18,6 @@ internal object RipgrepDetector {
                   • Ubuntu:  sudo apt install ripgrep
                   • Fedora:  sudo dnf install ripgrep
                   • Windows: winget install BurntSushi.ripgrep.MSVC
-
-                If 'rg' is installed but not on PATH (common on CI agents), point at it directly:
-                  -PrgPath=/path/to/rg
                 ================================================================================
                 """.trimIndent()
             )

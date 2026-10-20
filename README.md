@@ -15,8 +15,7 @@ Run the detector against a target repository or directory using Gradle:
 ```bash
 ./gradlew checkKgpDeprecations \
     -PmonorepoDir=/path/to/monorepo \
-    [-PkgpEngineVersion=latest] \
-    [-Pallowlist=config/allowlist-intellij.txt]
+    [-PkgpEngineVersion=latest]
 ```
 
 *(Running `./gradlew checkKgpDeprecations` with no arguments runs against the bundled `test-monorepo` fixture).*
@@ -67,26 +66,19 @@ Run the detector against a target repository or directory using Gradle:
 | `-PmonorepoDir` | Target directory to scan (`.kt`/`.java` files) | `test-monorepo` |
 | `-PkgpEngineVersion` | KGP version from Maven Central (e.g. `2.4.10`, `2.1.20`) | `2.4.10` |
 | `-PlocalRepoDir` | Path to local repository directory containing KGP artifacts (used by TeamCity) | `(none)` |
-| `-Pallowlist` | Path to allowlist file (e.g. `config/allowlist-intellij.txt`) | `(none)` |
 | `-PtargetSymbols` | Comma-separated symbol names to audit explicitly (verifies if present in jar, usages, allowlist state) | `(none)` |
-| `-PreportFile` | Output file path for full findings report | `build/reports/kgp-deprecations.txt` |
 | `-PexcludePatterns` | Additional comma-separated path substrings to exclude | `(none)` |
-| `-PfullIndex` | Include `internal`, `utils`, `impl`, and `Android*` classes in index | `false` |
-| `-PrgPath` | Explicit path to `rg` binary (bypasses `PATH` on CI) | `rg` from `PATH` |
-| `-PbuildScan` | Publish a Develocity build scan to `ge.labs.jb.gg` | `false` |
 
 ---
 
 ## Allowlist & Suppressions
 
-The allowlist file (e.g. `config/allowlist-intellij.txt`) suppresses known false positives or accepted usages.
+The default allowlist file (`config/allowlist-intellij.txt`) suppresses known false positives or accepted usages.
 
 ### Rules
 - **Reason per entry**: Every entry must have a `#` comment above it explaining why it is a false positive or permitted usage (enforced by `AllowlistTest`).
 - **Group suppression**: Suppressing one declaring class (`org.jetbrains.kotlin.gradle.dsl.KotlinCompile.kotlinOptions`) automatically suppresses all sibling classes sharing that logical deprecation.
 - **KGP scope only**: Do not list `$DefaultImpls` classes or non-KGP third-party packages (they are never indexed).
-
-For one-off experiments, point `-Pallowlist` at a local scratch file.
 
 ---
 
