@@ -53,7 +53,7 @@ fun levenshtein(a: String, b: String): Int {
 // 2. Repositories
 
 val localRepoDir = findProperty("localRepoDir")?.toString()?.takeIf { it.isNotBlank() }
-val engineVersion = findProperty("kgpEngineVersion")?.toString()?.takeIf { it.isNotBlank() } ?: "2.4.10"
+val engineVersion = findProperty("kgpEngineVersion")?.toString()?.takeIf { it.isNotBlank() } ?: "2.4.21"
 val engineSource = if (localRepoDir != null) "TeamCity Artifacts ($localRepoDir)" else "Maven (Central / kt-dev)"
 
 repositories {

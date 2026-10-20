@@ -64,7 +64,7 @@ Run the detector against a target repository or directory using Gradle:
 | Parameter | Description | Default |
 | :--- | :--- | :--- |
 | `-PmonorepoDir` | Target directory to scan (`.kt`/`.java` files) | `test-monorepo` |
-| `-PkgpEngineVersion` | KGP version from Maven Central (e.g. `2.4.10`, `2.1.20`) | `2.4.10` |
+| `-PkgpEngineVersion` | KGP version from Maven Central (e.g. `2.4.21`, `2.1.20`) | `2.4.21` |
 | `-PlocalRepoDir` | Path to local repository directory containing KGP artifacts (used by TeamCity) | `(none)` |
 | `-PtargetSymbols` | Comma-separated symbol names to audit explicitly (verifies if present in jar, usages, allowlist state) | `(none)` |
 | `-PexcludePatterns` | Additional comma-separated path substrings to exclude | `(none)` |
