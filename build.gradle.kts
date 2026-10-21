@@ -118,7 +118,10 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     systemProperty("kgp.engineSource", engineSource)
     // Resolved eagerly on purpose: JavaExec.systemProperty() does not unwrap a Provider.
     systemProperty("kgp.pluginJars", kgpJars.asPath)
-    systemProperty("kgp.reportFile", layout.buildDirectory.file("reports/kgp-deprecations.txt").get().asFile.path)
+    val reportFile = layout.buildDirectory.file("reports/kgp-deprecations.txt").get().asFile
+    systemProperty("kgp.reportFile", reportFile.path)
+    // The checkout (and build/) is reused between CI runs; never publish a previous run's report.
+    doFirst { reportFile.delete() }
     optionalProperty("excludePatterns").orNull?.let { systemProperty("kgp.excludePatterns", it) }
     optionalProperty("targetSymbols").orNull?.let { systemProperty("kgp.targetSymbols", it) }
 
