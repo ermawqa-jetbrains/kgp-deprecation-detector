@@ -1,4 +1,3 @@
-import java.io.File
 import java.net.URI
 
 plugins {
@@ -9,7 +8,10 @@ kotlin {
     jvmToolchain(21)
 }
 
-// 1. Property Validation (Catch CLI typos early)
+// 1. Inputs
+
+val defaultKgpVersion = "2.4.21"
+val defaultScanRoot = "test-monorepo"
 
 val knownProjectProperties = setOf(
     "monorepoDir",
@@ -19,22 +21,30 @@ val knownProjectProperties = setOf(
     "targetSymbols",
 )
 
-run {
-    val unknown = gradle.startParameter.projectProperties.keys
-        .filter { "." !in it && it !in knownProjectProperties }
-    if (unknown.isNotEmpty()) {
+/** Non-blank value of `-P<name>`, if given. */
+fun optionalProperty(name: String): Provider<String> =
+    providers.gradleProperty(name).map { it.trim() }.filter { it.isNotEmpty() }
+
+// Fail fast on typos like -PmonorepoDirr instead of silently scanning the default root.
+gradle.startParameter.projectProperties.keys
+    .filter { '.' !in it && it !in knownProjectProperties }
+    .takeIf { it.isNotEmpty() }
+    ?.let { unknown ->
         val details = unknown.joinToString("\n") { name ->
-            val suggestion = knownProjectProperties
-                .minByOrNull { levenshtein(name.lowercase(), it.lowercase()) }
-                ?.takeIf { levenshtein(name.lowercase(), it.lowercase()) <= 4 }
-            "  -P$name" + (suggestion?.let { " (did you mean -P$it?)" } ?: "")
+            "  -P$name" + (closestKnownProperty(name)?.let { " (did you mean -P$it?)" } ?: "")
         }
         throw GradleException(
             "Unknown project ${if (unknown.size == 1) "property" else "properties"}:\n$details\n" +
-                "Known properties: ${knownProjectProperties.sorted().joinToString(", ") { "-P$it" }}"
+                "Known properties: ${knownProjectProperties.sorted().joinToString(", ") { "-P$it" }}",
         )
     }
-}
+
+fun closestKnownProperty(name: String): String? =
+    knownProjectProperties
+        .map { it to levenshtein(name.lowercase(), it.lowercase()) }
+        .minByOrNull { (_, distance) -> distance }
+        ?.takeIf { (_, distance) -> distance <= 4 }
+        ?.first
 
 fun levenshtein(a: String, b: String): Int {
     var previous = IntArray(b.length + 1) { it }
@@ -52,8 +62,8 @@ fun levenshtein(a: String, b: String): Int {
 
 // 2. Repositories
 
-val localRepoDir = findProperty("localRepoDir")?.toString()?.takeIf { it.isNotBlank() }
-val engineVersion = findProperty("kgpEngineVersion")?.toString()?.takeIf { it.isNotBlank() } ?: "2.4.21"
+val localRepoDir = optionalProperty("localRepoDir").orNull
+val engineVersion = optionalProperty("kgpEngineVersion").getOrElse(defaultKgpVersion)
 val engineSource = if (localRepoDir != null) "TeamCity Artifacts ($localRepoDir)" else "Maven (Central / kt-dev)"
 
 repositories {
@@ -77,7 +87,10 @@ repositories {
 
 // 3. Dependencies
 
-val kgpJars = configurations.create("kgpJars")
+// The KGP jars are scan input (indexed via ASM), not part of the detector's own classpath.
+val kgpJars by configurations.creating {
+    isCanBeConsumed = false
+}
 
 dependencies {
     implementation("org.ow2.asm:asm:9.10.1")
@@ -85,19 +98,7 @@ dependencies {
     kgpJars("org.jetbrains.kotlin:kotlin-gradle-plugin:$engineVersion")
 }
 
-// 4. Main Verification Task
-
-fun resolveScanRoot(): File {
-    val raw = findProperty("monorepoDir")?.toString()?.takeIf { it.isNotBlank() } ?: "test-monorepo"
-    val given = File(raw)
-    val resolved = if (given.isAbsolute) given else layout.projectDirectory.asFile.resolve(raw)
-    if (!resolved.isDirectory) {
-        throw GradleException(
-            "-PmonorepoDir does not point at a directory:\n  given   : $raw\n  resolved: ${resolved.path}"
-        )
-    }
-    return resolved.canonicalFile
-}
+// 4. Verification task
 
 tasks.register<JavaExec>("checkKgpDeprecations") {
     group = "verification"
@@ -106,57 +107,40 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     mainClass.set("org.jetbrains.kotlin.deprecations.MainKt")
     outputs.upToDateWhen { false }
 
-    // Core execution properties
+    val scanRoot = projectDir.resolve(optionalProperty("monorepoDir").getOrElse(defaultScanRoot))
+    if (!scanRoot.isDirectory) {
+        throw GradleException("-PmonorepoDir does not point at a directory: ${scanRoot.path}")
+    }
+    val allowlist = layout.projectDirectory.file("config/allowlist-intellij.txt").asFile
+    args = listOfNotNull(scanRoot.canonicalPath, allowlist.takeIf { it.exists() }?.path)
+
     systemProperty("kgp.engineVersion", engineVersion)
     systemProperty("kgp.engineSource", engineSource)
+    // Resolved eagerly on purpose: JavaExec.systemProperty() does not unwrap a Provider.
     systemProperty("kgp.pluginJars", kgpJars.asPath)
+    systemProperty("kgp.reportFile", layout.buildDirectory.file("reports/kgp-deprecations.txt").get().asFile.path)
+    optionalProperty("excludePatterns").orNull?.let { systemProperty("kgp.excludePatterns", it) }
+    optionalProperty("targetSymbols").orNull?.let { systemProperty("kgp.targetSymbols", it) }
 
-    // Forward optional -P properties cleanly
-    fun forward(projectProp: String, systemProp: String = "kgp.$projectProp") {
-        findProperty(projectProp)?.toString()?.takeIf { it.isNotBlank() }?.let {
-            systemProperty(systemProp, it)
-        }
-    }
-    forward("excludePatterns")
-    forward("targetSymbols")
-
-    // Report file path
-    val reportFile = layout.buildDirectory.file("reports/kgp-deprecations.txt").get().asFile.path
-    systemProperty("kgp.reportFile", reportFile)
-
-    // Positional arguments: [scanRoot, allowlist]
-    val monorepo = resolveScanRoot().path
-    val defaultAllowlist = layout.projectDirectory.file("config/allowlist-intellij.txt").asFile
-    val allowlistArg = if (defaultAllowlist.exists()) defaultAllowlist.path else ""
-    args = listOf(monorepo, allowlistArg)
-
-    // TeamCity environment detection
-    val isTeamCity = !System.getenv("TEAMCITY_VERSION").isNullOrBlank() ||
-        !System.getProperty("teamcity.version").isNullOrBlank() ||
-        findProperty("teamcity.version")?.toString()?.isNotBlank() == true
+    val isTeamCity = providers.environmentVariable("TEAMCITY_VERSION")
+        .orElse(providers.gradleProperty("teamcity.version"))
+        .isPresent
     if (isTeamCity) {
         systemProperty("teamcity.version", "true")
     }
 
-    // Inspect exit code directly to handle findings (1) vs setup errors (2)
+    // Exit code 1 = findings, 2 = setup failure; handled below instead of Gradle's generic failure.
     isIgnoreExitValue = true
     val result = executionResult
     doLast {
-        when (val code = result.get().exitValue) {
-            0 -> Unit
-            1 -> {
-                if (!isTeamCity) {
-                    throw GradleException(
-                        "KGP deprecation check FAILED: deprecated API usages found. See the report above."
-                    )
-                }
-                // In Main.kt, ##teamcity[buildProblem] was already emitted. Exiting cleanly
-                // marks the build failed without duplicate errors or 100-line stack trace noise.
-            }
-            2 -> throw GradleException(
-                "KGP deprecation check DID NOT RUN (setup failure, exit 2). Fix the invocation and re-run."
-            )
-            else -> throw GradleException("KGP deprecation check exited unexpectedly with code $code.")
+        val failure = when (val code = result.get().exitValue) {
+            0 -> null
+            // On TeamCity, Main.kt already emitted ##teamcity[buildProblem]; finishing cleanly fails the
+            // build without a duplicate problem and a 100-line Tooling API stack trace.
+            1 -> "KGP deprecation check FAILED: deprecated API usages found. See the report above.".takeUnless { isTeamCity }
+            2 -> "KGP deprecation check DID NOT RUN (setup failure, exit 2). Fix the invocation and re-run."
+            else -> "KGP deprecation check exited unexpectedly with code $code."
         }
+        if (failure != null) throw GradleException(failure)
     }
 }
