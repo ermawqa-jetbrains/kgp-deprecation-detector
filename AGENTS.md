@@ -206,8 +206,12 @@ Pass 2 (reflective calls):
   narrower than the extractor's would silently lose candidates. `EmbeddedScriptExtractor` now
   builds its `Regex` directly from `EmbeddedScriptFinder.MARKER` instead of its own copy. Pinned
   by `EmbeddedScriptMarkerTest`.
-- **The ripgrep path uses `rg` on PATH (with walk fallback).** `SourceFileFinder` invokes
-  `System.getProperty("kgp.rgPath")` and falls back to a bare `rg`.
+- **`-PrgPath` exists because PATH is not reliable on CI.** `SourceFileFinder` invokes
+  `System.getProperty("kgp.rgPath")` and only falls back to a bare `rg`. TeamCity's Gradle runner
+  recomputes PATH internally when `jdkHome` is set, so a PATH prepend is silently dropped and every
+  run degrades to the walk fallback. The agents have no `rg` and no sudo, and the binary is over the
+  repository's blob limit, so the `Provision ripgrep` step (`.teamcity/scripts/provision-ripgrep.sh`)
+  caches a pinned, checksummed `rg` in the agent's persistent cache and the Gradle step passes it.
 - **The ripgrep path catches `Exception`, not just `IOException`, and redirects stderr.** A
   missing `rg` throws `IOException`, but a `SecurityException` or an interrupted `waitFor` used
   to kill the whole run instead of degrading to the walk; `redirectErrorStream(true)` removes the
@@ -292,7 +296,7 @@ Pass 2 (reflective calls):
 ./gradlew checkKgpDeprecations -PmonorepoDir=<path>
 ```
 
-Flags: `-PkgpEngineVersion` `-PlocalRepoDir` `-PexcludePatterns` `-PtargetSymbols`. See README.
+Flags: `-PkgpEngineVersion` `-PlocalRepoDir` `-PexcludePatterns` `-PtargetSymbols` `-PrgPath`. See README.
 
 ## Repo
 

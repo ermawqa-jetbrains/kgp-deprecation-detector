@@ -19,6 +19,7 @@ val knownProjectProperties = setOf(
     "localRepoDir",
     "excludePatterns",
     "targetSymbols",
+    "rgPath",
 )
 
 /** Non-blank value of `-P<name>`, if given. */
@@ -124,6 +125,8 @@ tasks.register<JavaExec>("checkKgpDeprecations") {
     doFirst { reportFile.delete() }
     optionalProperty("excludePatterns").orNull?.let { systemProperty("kgp.excludePatterns", it) }
     optionalProperty("targetSymbols").orNull?.let { systemProperty("kgp.targetSymbols", it) }
+    // TeamCity's Gradle runner recomputes PATH when jdkHome is set, so CI passes the binary explicitly.
+    optionalProperty("rgPath").orNull?.let { systemProperty("kgp.rgPath", it) }
 
     val isTeamCity = providers.environmentVariable("TEAMCITY_VERSION")
         .orElse(providers.gradleProperty("teamcity.version"))

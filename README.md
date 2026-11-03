@@ -68,6 +68,7 @@ Run the detector against a target repository or directory using Gradle:
 | `-PlocalRepoDir` | Path to local repository directory containing KGP artifacts (used by TeamCity) | `(none)` |
 | `-PtargetSymbols` | Comma-separated symbol names to audit explicitly (verifies if present in jar, usages, allowlist state) | `(none)` |
 | `-PexcludePatterns` | Additional comma-separated path substrings to exclude | `(none)` |
+| `-PrgPath` | Explicit path to the `rg` binary (bypasses `PATH`, used by TeamCity) | `rg` from `PATH` |
 
 ---
 
